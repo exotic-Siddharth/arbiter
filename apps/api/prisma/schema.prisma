@@ -1,0 +1,296 @@
+// Arbiter data model: spec section 7 (docs/DESIGN.md). Do not drop or rename anything
+// without a Decisions-log entry. Lanes must not edit this file (record needs in NOTES-integration.md).
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum Language {
+  CPP
+  PYTHON
+  JAVA
+  JAVASCRIPT
+}
+
+// FAILED = judge could not finish (IE)
+enum SubmissionStatus {
+  QUEUED
+  COMPILING
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum Verdict {
+  AC
+  WA
+  TLE
+  MLE
+  RE
+  CE
+  OLE
+  IE
+}
+
+enum CheckerType {
+  TOKENS
+  EXACT
+  FLOAT
+}
+
+// REFERENCE = admin validation run
+enum SubmissionKind {
+  NORMAL
+  REFERENCE
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+model User {
+  id               String                @id @default(cuid())
+  email            String                @unique // stored lower-case
+  username         String                @unique // 3–20 chars [a-zA-Z0-9_], case-insensitive unique (store lower in usernameLower)
+  usernameLower    String                @unique
+  passwordHash     String
+  role             Role                  @default(USER)
+  rating           Int                   @default(1200)
+  bio              String?               @db.VarChar(280)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  refreshTokens    RefreshToken[]
+  submissions      Submission[]
+  registrations    ContestRegistration[]
+  ratingChanges    RatingChange[]
+  authoredProblems Problem[]             @relation("ProblemAuthor")
+}
+
+model RefreshToken {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique // sha256(base64url token)
+  familyId     String // one family per login; rotation keeps the family
+  userAgent    String?
+  ip           String?
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+model Problem {
+  id                String           @id @default(cuid())
+  slug              String           @unique
+  title             String
+  statementMd       String           @db.Text
+  difficulty        Difficulty
+  timeLimitMs       Int              @default(1000)
+  memoryLimitMb     Int              @default(256)
+  checker           CheckerType      @default(TOKENS)
+  floatTolerance    Float? // used when checker = FLOAT (abs OR rel), e.g. 1e-6
+  isPublished       Boolean          @default(false)
+  authorId          String?
+  author            User?            @relation("ProblemAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  referenceLanguage Language?
+  referenceSolution String?          @db.Text
+  submissionCount   Int              @default(0) // NORMAL submissions only
+  acceptedCount     Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  tags              ProblemTag[]
+  testCases         TestCase[]
+  submissions       Submission[]
+  contestProblems   ContestProblem[]
+}
+
+model Tag {
+  id       String       @id @default(cuid())
+  name     String       @unique
+  problems ProblemTag[]
+}
+
+model ProblemTag {
+  problemId String
+  tagId     String
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([problemId, tagId])
+}
+
+model TestCase {
+  id             String  @id @default(cuid())
+  problemId      String
+  problem        Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  ordinal        Int // 1-based; samples have the lowest ordinals
+  input          String  @db.Text // ≤ 4 MB
+  expectedOutput String  @db.Text
+  isSample       Boolean @default(false)
+  explanation    String? @db.Text // samples only, markdown
+
+  @@unique([problemId, ordinal])
+}
+
+model Submission {
+  id            String                 @id @default(cuid())
+  kind          SubmissionKind         @default(NORMAL)
+  userId        String
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problemId     String
+  problem       Problem                @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  contestId     String? // set only for in-window submissions by registrants
+  contest       Contest?               @relation(fields: [contestId], references: [id], onDelete: SetNull)
+  language      Language
+  sourceCode    String                 @db.Text // ≤ 64 KB
+  status        SubmissionStatus       @default(QUEUED)
+  verdict       Verdict?
+  timeMs        Int? // max CPU time over executed tests
+  memoryKb      Int? // max RSS over executed tests
+  testsPassed   Int                    @default(0)
+  testsTotal    Int                    @default(0)
+  compileOutput String?                @db.Text // ≤ 16 KB
+  errorMessage  String? // internal details, admin-only
+  createdAt     DateTime               @default(now())
+  judgedAt      DateTime?
+  results       SubmissionTestResult[]
+
+  @@index([userId, createdAt])
+  @@index([problemId, createdAt])
+  @@index([contestId, createdAt])
+  @@index([createdAt])
+}
+
+model SubmissionTestResult {
+  id            String     @id @default(cuid())
+  submissionId  String
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  ordinal       Int
+  verdict       Verdict
+  timeMs        Int
+  memoryKb      Int
+  isSample      Boolean
+  outputPreview String?    @db.Text // samples only: first 4 KB of stdout
+  stderrPreview String?    @db.Text // samples only: last 2 KB of stderr
+
+  @@unique([submissionId, ordinal])
+}
+
+model Contest {
+  id                String                @id @default(cuid())
+  slug              String                @unique
+  title             String
+  descriptionMd     String                @db.Text
+  startsAt          DateTime
+  endsAt            DateTime
+  isPublished       Boolean               @default(false)
+  penaltyMinutes    Int                   @default(20)
+  ratedAt           DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  problems          ContestProblem[]
+  registrations     ContestRegistration[]
+  submissions       Submission[]
+  ratingChanges     RatingChange[]
+  plagiarismReports PlagiarismReport[]
+}
+
+model ContestProblem {
+  contestId String
+  problemId String
+  label     String  @db.VarChar(2) // "A", "B", …
+  ordinal   Int
+  contest   Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@id([contestId, problemId])
+  @@unique([contestId, label])
+}
+
+model ContestRegistration {
+  contestId    String
+  userId       String
+  registeredAt DateTime @default(now())
+  contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([contestId, userId])
+}
+
+model RatingChange {
+  id        String   @id @default(cuid())
+  userId    String
+  contestId String
+  oldRating Int
+  newRating Int
+  rank      Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contest   Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contestId])
+}
+
+model PlagiarismReport {
+  id         String           @id @default(cuid())
+  contestId  String?
+  contest    Contest?         @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  problemId  String? // null = all problems of the contest
+  threshold  Float            @default(0.6)
+  status     JobStatus        @default(PENDING)
+  error      String?
+  createdAt  DateTime         @default(now())
+  finishedAt DateTime?
+  pairs      PlagiarismPair[]
+}
+
+model PlagiarismPair {
+  id            String           @id @default(cuid())
+  reportId      String
+  report        PlagiarismReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  problemId     String
+  submissionAId String
+  submissionBId String
+  similarity    Float // 0..1
+  matchedLinesA Json // number[] (1-based line numbers)
+  matchedLinesB Json
+
+  @@index([reportId, similarity])
+}
+
+// generate-outputs jobs
+model AdminJob {
+  id         String    @id @default(cuid())
+  type       String // "GENERATE_OUTPUTS"
+  problemId  String
+  status     JobStatus @default(PENDING)
+  progress   Int       @default(0) // tests done
+  total      Int       @default(0)
+  error      String?
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+}

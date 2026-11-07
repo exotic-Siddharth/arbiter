@@ -1,0 +1,45 @@
+# Local development infrastructure: `docker compose up -d --wait` (or `npm run infra:up`).
+# Host ports are non-default (55432, 56379) to avoid clashes with other local services.
+# They are bound to loopback only, on IPv4 AND IPv6: on some machines "localhost" resolves
+# only to ::1, and the spec's URLs use localhost.
+name: arbiter
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: arbiter
+      POSTGRES_PASSWORD: arbiter
+      POSTGRES_DB: arbiter
+    ports:
+      - { target: 5432, published: '55432', host_ip: 127.0.0.1 }
+      - { target: 5432, published: '55432', host_ip: '::1' }
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U arbiter -d arbiter']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    ports:
+      - { target: 6379, published: '56379', host_ip: 127.0.0.1 }
+      - { target: 6379, published: '56379', host_ip: '::1' }
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+playwright-report
+test-results
+blob-report
+package-lock.json
+apps/api/data
+apps/api/prisma/migrations
+seed
+sandbox
+docs
+*.md

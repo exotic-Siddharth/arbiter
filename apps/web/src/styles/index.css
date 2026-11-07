@@ -1,0 +1,451 @@
+@import 'tailwindcss';
+
+/* Dark mode is class-based: /theme-init.js and stores/theme.ts toggle .dark on <html> (R18). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens (spec 13.1).
+ *
+ * Every token is a real CSS custom property named --color-* (so inline styles and charts can use
+ * var(--color-verdict-ac)) AND a Tailwind colour (bg-surface, text-muted, border-border,
+ * text-verdict-ac, bg-tier-blue/15, ...) registered in `@theme inline` below.
+ * Light values live on :root, the dark "midnight" theme on .dark; dark is the default.
+ *
+ * The dark theme uses the spec hexes as given. The light theme darkens the semantic colours
+ * (verdicts, difficulties, tiers, accent) so text meets WCAG AA on white.
+ */
+:root {
+  color-scheme: light;
+
+  --color-background: #f7f8fb;
+  --color-surface: #ffffff;
+  --color-raised: #f1f3f8;
+  --color-raised-hover: #e8ebf2;
+  --color-border: #e3e6ee;
+  --color-border-strong: #cdd2dd;
+  --color-foreground: #11141b;
+  --color-muted: #5b6475;
+
+  --color-primary: #7c5cff;
+  --color-primary-hover: #6a4af0;
+  --color-on-primary: #ffffff;
+  --color-primary-soft: rgb(124 92 255 / 0.1);
+  --color-primary-text: #6a4af0;
+  --color-accent: #0e7490;
+  --color-ring: #7c5cff;
+
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #be123c;
+  --color-info: #0369a1;
+  --color-danger-solid: #e11d48;
+  --color-danger-solid-hover: #be123c;
+  --color-overlay: rgb(17 20 27 / 0.45);
+
+  --color-verdict-ac: #15803d;
+  --color-verdict-wa: #be123c;
+  --color-verdict-tle: #b45309;
+  --color-verdict-mle: #c2410c;
+  --color-verdict-re: #a21caf;
+  --color-verdict-ce: #0369a1;
+  --color-verdict-ole: #a16207;
+  --color-verdict-ie: #475569;
+  --color-verdict-pending: #52525b;
+
+  --color-difficulty-easy: #0f766e;
+  --color-difficulty-medium: #b45309;
+  --color-difficulty-hard: #be123c;
+
+  --color-tier-gray: #4b5563;
+  --color-tier-green: #15803d;
+  --color-tier-cyan: #0e7490;
+  --color-tier-blue: #1d4ed8;
+  --color-tier-violet: #6d28d9;
+  --color-tier-amber: #b45309;
+
+  --navbar-height: 3.5rem;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --color-background: #0b0d12;
+  --color-surface: #12151c;
+  --color-raised: #181c25;
+  --color-raised-hover: #1f2430;
+  --color-border: #262b36;
+  --color-border-strong: #353b49;
+  --color-foreground: #e6e8ee;
+  --color-muted: #9aa3b2;
+
+  --color-primary: #7c5cff;
+  --color-primary-hover: #6a4af0;
+  --color-on-primary: #ffffff;
+  --color-primary-soft: rgb(124 92 255 / 0.16);
+  --color-primary-text: #a594ff;
+  --color-accent: #22d3ee;
+  --color-ring: #7c5cff;
+
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #fb7185;
+  --color-info: #38bdf8;
+  --color-danger-solid: #e11d48;
+  --color-danger-solid-hover: #be123c;
+  --color-overlay: rgb(3 4 7 / 0.72);
+
+  --color-verdict-ac: #22c55e;
+  --color-verdict-wa: #f43f5e;
+  --color-verdict-tle: #f59e0b;
+  --color-verdict-mle: #f97316;
+  --color-verdict-re: #d946ef;
+  --color-verdict-ce: #38bdf8;
+  --color-verdict-ole: #eab308;
+  --color-verdict-ie: #94a3b8;
+  --color-verdict-pending: #a1a1aa;
+
+  --color-difficulty-easy: #14b8a6;
+  --color-difficulty-medium: #f59e0b;
+  --color-difficulty-hard: #f43f5e;
+
+  --color-tier-gray: #9ca3af;
+  --color-tier-green: #22c55e;
+  --color-tier-cyan: #22d3ee;
+  --color-tier-blue: #3b82f6;
+  --color-tier-violet: #a78bfa;
+  --color-tier-amber: #f59e0b;
+}
+
+/*
+ * Tailwind colour utilities for the tokens above. `inline` makes utilities read the variable at
+ * the element (R18). Tailwind also emits these self-references into @layer theme; the unlayered
+ * :root/.dark declarations above always win the cascade, so they are never evaluated.
+ */
+@theme inline {
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-raised: var(--color-raised);
+  --color-raised-hover: var(--color-raised-hover);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --color-foreground: var(--color-foreground);
+  --color-muted: var(--color-muted);
+
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-on-primary: var(--color-on-primary);
+  --color-primary-soft: var(--color-primary-soft);
+  --color-primary-text: var(--color-primary-text);
+  --color-accent: var(--color-accent);
+  --color-ring: var(--color-ring);
+
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
+  --color-info: var(--color-info);
+  --color-danger-solid: var(--color-danger-solid);
+  --color-danger-solid-hover: var(--color-danger-solid-hover);
+  --color-overlay: var(--color-overlay);
+
+  --color-verdict-ac: var(--color-verdict-ac);
+  --color-verdict-wa: var(--color-verdict-wa);
+  --color-verdict-tle: var(--color-verdict-tle);
+  --color-verdict-mle: var(--color-verdict-mle);
+  --color-verdict-re: var(--color-verdict-re);
+  --color-verdict-ce: var(--color-verdict-ce);
+  --color-verdict-ole: var(--color-verdict-ole);
+  --color-verdict-ie: var(--color-verdict-ie);
+  --color-verdict-pending: var(--color-verdict-pending);
+
+  --color-difficulty-easy: var(--color-difficulty-easy);
+  --color-difficulty-medium: var(--color-difficulty-medium);
+  --color-difficulty-hard: var(--color-difficulty-hard);
+
+  --color-tier-gray: var(--color-tier-gray);
+  --color-tier-green: var(--color-tier-green);
+  --color-tier-cyan: var(--color-tier-cyan);
+  --color-tier-blue: var(--color-tier-blue);
+  --color-tier-violet: var(--color-tier-violet);
+  --color-tier-amber: var(--color-tier-amber);
+}
+
+@theme {
+  --font-sans:
+    'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji';
+  --font-mono:
+    'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+    monospace;
+
+  /* 10 px cards, 8 px controls (spec 13.1): rounded-card, rounded-control. */
+  --radius-card: 10px;
+  --radius-control: 8px;
+
+  /* Short motion (150-200 ms); everything is disabled under prefers-reduced-motion below. */
+  --animate-fade-in: fade-in 150ms ease-out;
+  --animate-scale-in: scale-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-down: slide-down 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-up: slide-up 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* New items entering a live list from the top (feed, scoreboard rows). */
+  --animate-enter-top: enter-top 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* Background flash for a row whose data just changed. */
+  --animate-highlight: highlight 1200ms ease-out;
+  --animate-progress-indeterminate: progress-indeterminate 1.4s ease-in-out infinite;
+  --animate-nav-progress: nav-progress 6s cubic-bezier(0.08, 0.6, 0.2, 1) forwards;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes slide-down {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes enter-top {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes highlight {
+    from {
+      background-color: color-mix(in oklab, var(--color-primary) 18%, transparent);
+    }
+    to {
+      background-color: transparent;
+    }
+  }
+  @keyframes progress-indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
+  @keyframes nav-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(0.92);
+    }
+  }
+}
+
+@layer base {
+  html {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* 14 px base (spec 13.1); rem stays 16 px so browser font scaling keeps working. */
+  body {
+    min-height: 100dvh;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  /* Visible focus ring on every keyboard-focusable element. */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  /* Monaco draws its own focus border. */
+  .monaco-editor :focus-visible {
+    outline: none;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-primary) 32%, transparent);
+  }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  summary {
+    cursor: pointer;
+  }
+
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Rendered markdown (components/Markdown.tsx): problem statements, contest descriptions. */
+  .markdown {
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+    color: var(--color-foreground);
+  }
+  .markdown > * + * {
+    margin-top: 0.9em;
+  }
+  .markdown :where(h1, h2, h3, h4, h5, h6) {
+    margin-top: 1.6em;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+  .markdown > :first-child {
+    margin-top: 0;
+  }
+  .markdown h1 {
+    font-size: 1.5rem;
+  }
+  .markdown h2 {
+    font-size: 1.15rem;
+  }
+  .markdown h3 {
+    font-size: 1.0rem;
+  }
+  .markdown :where(h4, h5, h6) {
+    font-size: 0.9375rem;
+  }
+  .markdown a {
+    color: var(--color-primary-text);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, var(--color-primary-text) 45%, transparent);
+    text-underline-offset: 2px;
+  }
+  .markdown a:hover {
+    text-decoration-color: currentColor;
+  }
+  .markdown strong {
+    font-weight: 600;
+  }
+  .markdown ul {
+    list-style: disc;
+    padding-left: 1.4em;
+  }
+  .markdown ol {
+    list-style: decimal;
+    padding-left: 1.5em;
+  }
+  .markdown li + li {
+    margin-top: 0.3em;
+  }
+  .markdown li > :where(ul, ol) {
+    margin-top: 0.3em;
+  }
+  .markdown li::marker {
+    color: var(--color-muted);
+  }
+  .markdown blockquote {
+    border-left: 3px solid var(--color-border-strong);
+    padding-left: 1em;
+    color: var(--color-muted);
+  }
+  .markdown hr {
+    border-color: var(--color-border);
+    margin-block: 1.5em;
+  }
+  .markdown :not(pre) > code {
+    border: 1px solid var(--color-border);
+    border-radius: 5px;
+    background-color: var(--color-raised);
+    padding: 0.1em 0.35em;
+    font-size: 0.86em;
+  }
+  .markdown pre {
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background-color: var(--color-raised);
+    padding: 0.85em 1em;
+    font-size: 0.86em;
+    line-height: 1.6;
+  }
+  .markdown .markdown-table {
+    overflow-x: auto;
+  }
+  .markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.93em;
+  }
+  .markdown :where(th, td) {
+    border: 1px solid var(--color-border);
+    padding: 0.45em 0.75em;
+    text-align: left;
+  }
+  .markdown th {
+    background-color: var(--color-raised);
+    font-weight: 600;
+  }
+  .markdown img {
+    max-width: 100%;
+    border-radius: var(--radius-control);
+  }
+  .markdown .katex {
+    font-size: 1.05em;
+  }
+  .markdown .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-block: 0.25em;
+  }
+}
+
+/* Thin, theme-coloured scrollbars for scroll areas (panels, code, tables). */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+/* Hide the scrollbar of a horizontally scrolling strip (tabs on small screens). */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
