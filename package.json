@@ -1,0 +1,53 @@
+{
+  "name": "arbiter",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Online judge and live programming-contest platform with Docker-sandboxed code execution",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,worker,web -c cyan,magenta,green \"npm run dev -w @arbiter/api\" \"npm run dev:worker -w @arbiter/api\" \"npm run dev -w @arbiter/web\"",
+    "build": "npm run build -w @arbiter/api && npm run build -w @arbiter/web",
+    "typecheck": "tsc --noEmit -p scripts && npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test --workspaces --if-present",
+    "test:sandbox": "tsx scripts/test-sandbox.ts",
+    "e2e": "npm run e2e -w @arbiter/web",
+    "db:migrate": "npm run db:migrate -w @arbiter/api",
+    "db:deploy": "npm run db:deploy -w @arbiter/api",
+    "db:generate": "npm run db:generate -w @arbiter/api",
+    "db:seed": "npm run db:seed -w @arbiter/api",
+    "db:reset": "npm run db:reset -w @arbiter/api",
+    "sandbox:build": "docker build -t arbiter-sandbox:latest sandbox",
+    "infra:up": "docker compose up -d --wait",
+    "infra:down": "docker compose down",
+    "wait-for": "tsx scripts/wait-for.ts",
+    "loadtest": "tsx scripts/loadtest.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.20.5",
+    "@vitest/coverage-v8": "^3.2.7",
+    "concurrently": "^9.2.5",
+    "cross-env": "^10.1.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^3.2.7"
+  }
+}

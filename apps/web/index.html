@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0b0d12" />
+    <meta
+      name="description"
+      content="Arbiter is an online judge: solve original algorithmic problems in the browser, get judged in a locked-down Docker sandbox, and compete in live ICPC-style contests."
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Applies the stored theme before first paint. External file: the production CSP allows script-src 'self' only. -->
+    <script src="/theme-init.js"></script>
+    <title>Arbiter</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
