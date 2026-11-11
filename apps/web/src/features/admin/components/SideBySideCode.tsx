@@ -27,7 +27,7 @@ function CodePane({ side, label }: { side: PlagiarismSide; label: string }) {
           {LANGUAGES[side.language].label} · {pluralize(matched.size, 'matched line')}
         </span>
       </header>
-      <div className="max-h-[32rem] overflow-auto scrollbar-thin">
+      <div className="relative max-h-[32rem] overflow-auto scrollbar-thin">
         <pre className="min-w-max py-2 font-mono text-[12.5px] leading-[1.55]">
           <code>
             {lines.map((text, index) => {

@@ -55,10 +55,10 @@ function RankCell({ rank, tied }: { rank: number; tied: boolean }) {
 /** Ranked table; ties (equal rank) are shown with the shared number and an "=" marker. */
 export function LeaderboardTable({ entries, currentUser, by }: LeaderboardTableProps) {
   return (
-    <Table>
+    <Table className="max-sm:[&_td]:px-2 max-sm:[&_th]:px-2 max-sm:[&_td:first-child]:pl-3 max-sm:[&_th:first-child]:pl-3 max-sm:[&_td:last-child]:pr-3 max-sm:[&_th:last-child]:pr-3">
       <THead>
         <Tr>
-          <Th className="w-20">Rank</Th>
+          <Th className="w-14 sm:w-20">Rank</Th>
           <Th>User</Th>
           <Th numeric className={cn(by === 'rating' && 'text-foreground')}>
             Rating
