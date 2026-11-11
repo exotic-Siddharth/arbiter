@@ -68,9 +68,14 @@ export function Hero() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(60rem_28rem_at_75%_-10%,color-mix(in_srgb,var(--color-primary)_16%,transparent),transparent)]"
       />
-      <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-14 lg:px-8 lg:py-20">
+      <div className="relative mx-auto grid max-w-7xl items-center grid-cols-[minmax(0,1fr)] gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-14 lg:px-8 lg:py-20">
         <div className="space-y-6">
-          <Badge tone="primary" pill icon={<ShieldCheck />}>
+          <Badge
+            tone="primary"
+            pill
+            icon={<ShieldCheck />}
+            className="h-auto min-h-6 py-1 leading-snug whitespace-normal"
+          >
             Every submission runs in a locked-down Docker sandbox
           </Badge>
           <h1 className="text-4xl font-semibold tracking-tight text-balance text-foreground sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">

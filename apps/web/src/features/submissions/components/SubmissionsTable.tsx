@@ -28,7 +28,10 @@ export function SubmissionsTable({
   justFinished,
 }: SubmissionsTableProps) {
   return (
-    <Table aria-label="Submissions">
+    <Table
+      className="max-sm:[&_td]:px-2 max-sm:[&_th]:px-2 max-sm:[&_td:first-child]:pl-3 max-sm:[&_th:first-child]:pl-3 max-sm:[&_td:last-child]:pr-3 max-sm:[&_th:last-child]:pr-3"
+      aria-label="Submissions"
+    >
       <THead>
         <Tr>
           <Th>When</Th>
@@ -54,7 +57,7 @@ export function SubmissionsTable({
               interactive
               className={cn(justFinished?.has(submission.id) && 'animate-highlight')}
             >
-              <Td className="whitespace-nowrap">
+              <Td className="sm:whitespace-nowrap">
                 {own && pending ? <SubmissionRoom id={submission.id} /> : null}
                 <Link
                   to={`/submissions/${submission.id}`}
@@ -67,11 +70,11 @@ export function SubmissionsTable({
               <Td className="hidden md:table-cell">
                 <UserLink username={submission.user.username} />
               </Td>
-              <Td className="max-w-0 min-w-36">
+              <Td className="max-w-0 min-w-24 sm:min-w-32">
                 <div className="flex min-w-0 items-center gap-2">
                   <Link
                     to={`/problems/${submission.problem.slug}`}
-                    className="truncate rounded-sm font-medium text-foreground hover:text-primary-text focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    className="rounded-sm font-medium text-foreground hover:text-primary-text sm:truncate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
                     {submission.problem.title}
                   </Link>
@@ -88,7 +91,7 @@ export function SubmissionsTable({
               <Td muted className="hidden whitespace-nowrap lg:table-cell">
                 {languageLabel(submission.language)}
               </Td>
-              <Td>
+              <Td className="whitespace-nowrap">
                 <VerdictBadge
                   verdict={submission.verdict}
                   status={submission.status}
