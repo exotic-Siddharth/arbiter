@@ -116,3 +116,49 @@ test; `wrong.py` its first failing hidden test and verdict.
    against the walkthroughs.
 4. `python scripts/verify-problems.py <slug>` until the row says PASS.
 5. `python scripts/gen-tests.py --check <slug>` confirms the committed tests are reproducible.
+
+## Hidden tests and seeding
+
+The hidden tests (`tests/03.*` and up, about 90 MB) are **not committed**; git keeps only the
+samples `01.*` and `02.*` of each problem (see `.gitignore`). Everything else is generated
+deterministically, and `CHECKSUMS.sha256` pins every file:
+
+```
+npm run problems:gen                                   # python scripts/gen-tests.py --all
+cd seed/problems && sha256sum -c --quiet CHECKSUMS.sha256   # prints nothing when every file matches
+```
+
+`npm run db:seed` (`apps/api/prisma/seed.ts`) refuses to start, before it touches the database,
+when any hidden test is missing, and tells you to run `npm run problems:gen`. A fresh clone is:
+
+```
+npm install
+npm run infra:up            # Postgres and Redis
+npm run db:deploy           # migrations
+npm run problems:gen        # hidden tests, about 50 s
+npm run db:seed             # wipes and recreates the demo data, prints the demo credentials
+npm run sandbox:build       # the judge image, once
+```
+
+The seed is idempotent: it truncates every application table and recreates the same data
+(fixed random seeds), so running it twice gives the same database apart from timestamps relative
+to "now" (and a few of today's practice submissions, which depend on the time of day). It loads the 15 problems (statements with CRLF normalised to LF; samples flagged
+`isSample` with their walkthrough as `explanation`; the C++ reference stored as the problem's
+reference solution) and creates:
+
+| What | Details |
+|---|---|
+| Users | `admin` (password `SEED_ADMIN_PASSWORD`, dev default `admin12345`), `demo` (`SEED_DEMO_PASSWORD`, `demo12345`; the "Try the demo" button logs in as this user) and 30 synthetic users (same password as demo, varied ratings) |
+| Arbiter Round #1 | ended 7 days ago, 2 hours, problems A-E (all published), 26 participants with realistic submissions, ratings applied through the real `rateContest` / `computeRatingDeltas`, and two deliberately plagiarised pairs (renamed identifiers) found by a plagiarism report that the real winnowing code produced |
+| Weekly Practice Arena | started 1 hour ago, ends in 14 days, 4 unpublished problems, 10 participants with submissions |
+| Arbiter Round #2 | starts in 3 days, 3 unpublished problems, 6 registrations |
+| History | about 1100 submissions inserted directly with verdicts, per-test results, times and source code (variants of the reference programs). They are not judged. Problem counters follow the R7 rules |
+
+Verify the reference programs through the real judge with the API and worker running (start the
+API with `RATE_LIMITS_ENABLED=false`, the submission limit is 6 per minute):
+
+```
+npm run judge:refs          # every ref.cpp / ref.py -> AC, slow.py -> TLE, wrong.py -> WA
+```
+
+It submits as the admin user, so run `npm run db:seed` afterwards for a clean database.

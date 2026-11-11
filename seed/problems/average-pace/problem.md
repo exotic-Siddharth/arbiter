@@ -1,6 +1,8 @@
 Ines is training for the Riverside half marathon. Her watch splits every run into $n$ segments, and for segment $i$ it records the distance $d_i$ in metres and the time $t_i$ in seconds. The *pace* of a stretch of running is the time it takes per kilometre, measured in **minutes per kilometre**: a stretch of $D$ metres run in $T$ seconds has pace
 
-$$\frac{T / 60}{D / 1000}.$$
+$$
+\frac{T / 60}{D / 1000}.
+$$
 
 Her coach does not trust the extremes: a downhill sprint or a stop at a traffic light says little about her form. So the coach computes a *trimmed pace*:
 

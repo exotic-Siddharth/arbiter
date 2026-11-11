@@ -1,4 +1,4 @@
-import { ScoreboardSchema, type ScoreRow } from '@arbiter/shared';
+import { ScoreRowSchema, ScoreboardSchema, type ScoreRow } from '@arbiter/shared';
 import type { Contest, PrismaClient, User } from '@prisma/client';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -192,6 +192,20 @@ describe('scoreboard cache', () => {
     });
     const row = await recomputeRow(contest.id, users.alice.id);
     expect(row?.cells[2]).toMatchObject({ label: 'C', pending: true, solved: false });
+  });
+
+  it('recomputeRow returns rows that validate against ScoreRowSchema (emitScoreboardRow input)', async () => {
+    const { contest, users, problemIds } = await seedFixture();
+    await createSubmission(prisma, {
+      userId: users.alice.id,
+      problemId: problemIds.C,
+      contestId: contest.id,
+      createdAt: at(80),
+    });
+    for (const name of FIXTURE_USERS) {
+      const row = await recomputeRow(contest.id, users[name].id);
+      expect(ScoreRowSchema.safeParse(row).success, name).toBe(true);
+    }
   });
 
   it('builds the cache on first use when recomputeRow runs before any read', async () => {
