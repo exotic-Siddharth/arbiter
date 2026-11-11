@@ -37,14 +37,25 @@ test.describe('auth', () => {
     await page.getByRole('button', { name: 'Log in', exact: true }).click();
     await expect(page.getByText(/invalid|incorrect|wrong/i).first()).toBeVisible();
 
+    // A username that exists is refused ...
+    const existing = uniqueUsername('dup');
+    const created = await page.request.post('/api/auth/register', {
+      data: { email: `${existing}@e2e.arbiter.test`, username: existing, password: PASSWORD },
+    });
+    expect(created.status()).toBe(201);
     await page.goto('/register');
     await page
       .getByLabel('Email', { exact: true })
       .fill(`${uniqueUsername('dup')}@e2e.arbiter.test`);
-    await page.getByLabel('Username', { exact: true }).fill('demo');
+    await page.getByLabel('Username', { exact: true }).fill(existing);
     await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: 'Create account' }).click();
     await expect(page.getByText(/username is taken/i).first()).toBeVisible();
+
+    // ... and so is the reserved name of the shared demo account (A-08).
+    await page.getByLabel('Username', { exact: true }).fill('demo');
+    await page.getByRole('button', { name: 'Create account' }).click();
+    await expect(page.getByText(/username is reserved/i).first()).toBeVisible();
   });
 
   test('"Try the demo" signs in as the demo user', async ({ page }) => {

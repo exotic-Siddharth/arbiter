@@ -106,6 +106,23 @@ const EnvSchema = z
         message: 'RATE_LIMITS_ENABLED=false is not allowed when NODE_ENV=production',
       });
     }
+    if (value.NODE_ENV === 'production') {
+      // The repo's .env.example values are public: anyone can mint tokens or log in with them.
+      if (/dev-only|change-me/i.test(value.JWT_ACCESS_SECRET)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['JWT_ACCESS_SECRET'],
+          message: 'JWT_ACCESS_SECRET is a published development value: set a random secret',
+        });
+      }
+      if (value.SEED_ADMIN_PASSWORD === 'admin12345') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['SEED_ADMIN_PASSWORD'],
+          message: 'SEED_ADMIN_PASSWORD is the published development password: choose another',
+        });
+      }
+    }
   })
   .transform((value) => ({
     ...value,

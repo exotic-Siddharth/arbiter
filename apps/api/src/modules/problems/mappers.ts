@@ -11,10 +11,22 @@ import type { Prisma, Problem, TestCase } from '@prisma/client';
  * Lane A3b uses toProblemDetail for GET /api/contests/:slug/problems/:label.
  */
 
-/** Prisma `include` that loads what toProblemSummary needs. */
-export const problemSummaryInclude = {
+/**
+ * Prisma `select` that loads exactly what toProblemSummary reads (no statementMd or
+ * referenceSolution: lists must not materialise them). `id` is for the caller's lookups.
+ */
+export const problemSummarySelect = {
+  id: true,
+  slug: true,
+  title: true,
+  difficulty: true,
+  submissionCount: true,
+  acceptedCount: true,
   tags: { include: { tag: { select: { name: true } } } },
-} satisfies Prisma.ProblemInclude;
+} satisfies Prisma.ProblemSelect;
+
+/** Detail queries load every scalar except the reference solution, which is never served. */
+export const problemDetailOmit = { referenceSolution: true } satisfies Prisma.ProblemOmit;
 
 /** Prisma `include` that loads what toProblemDetail needs (sample tests only, in ordinal order). */
 export const problemDetailInclude = {
@@ -22,13 +34,13 @@ export const problemDetailInclude = {
   testCases: { where: { isSample: true }, orderBy: { ordinal: 'asc' } },
 } satisfies Prisma.ProblemInclude;
 
-/** The fields toProblemSummary reads. Any row loaded with problemSummaryInclude fits. */
+/** The fields toProblemSummary reads. Any row loaded with problemSummarySelect fits. */
 export type ProblemSummaryRow = Pick<
   Problem,
   'slug' | 'title' | 'difficulty' | 'submissionCount' | 'acceptedCount'
 > & { tags: { tag: { name: string } }[] };
 
-/** The fields toProblemDetail reads. Any row loaded with problemDetailInclude fits. */
+/** The fields toProblemDetail reads. Any row loaded with problemDetailInclude (and problemDetailOmit) fits. */
 export type ProblemDetailRow = ProblemSummaryRow &
   Pick<Problem, 'statementMd' | 'timeLimitMs' | 'memoryLimitMb' | 'checker'> & {
     testCases: Pick<

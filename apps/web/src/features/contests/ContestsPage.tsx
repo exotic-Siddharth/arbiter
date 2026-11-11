@@ -1,13 +1,13 @@
-import { ContestListSchema, type ContestStatus, type ContestSummary } from '@arbiter/shared';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ContestStatus, ContestSummary } from '@arbiter/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { CalendarX2 } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { Page } from '@/components/layout/Page';
 import { EmptyState, QueryState, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
-import { api } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
 import { ContestListSkeleton } from './components/ContestListSkeleton';
 import { ContestCard } from './components/ContestCard';
+import { useContestList } from './hooks/useContestList';
 
 type Tab = 'running' | 'upcoming' | 'past';
 
@@ -31,16 +31,13 @@ function isTab(value: string | null): value is Tab {
 export function Component() {
   const [params, setParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const contests = useQuery({
-    queryKey: qk.contests.list(),
-    queryFn: ({ signal }) => api.get('/contests', { schema: ContestListSchema, signal }),
-  });
+  const contests = useContestList();
 
   const groups = new Map<ContestStatus, ContestSummary[]>();
   for (const t of TABS) {
     groups.set(
       t.status,
-      (contests.data ?? []).filter((c) => c.status === t.status).sort(byTime[t.status]),
+      (contests.data?.contests ?? []).filter((c) => c.status === t.status).sort(byTime[t.status]),
     );
   }
   const requested = params.get('tab');
@@ -48,7 +45,7 @@ export function Component() {
     ? 'running'
     : groups.get('UPCOMING')?.length
       ? 'upcoming'
-      : contests.data?.length
+      : contests.data?.contests.length
         ? 'past'
         : 'running';
   const tab = isTab(requested) ? requested : fallback;
@@ -103,6 +100,7 @@ export function Component() {
                       <ContestCard
                         contest={contest}
                         now={contests.dataUpdatedAt}
+                        serverOffsetMs={contests.data?.offsetMs}
                         onBoundary={onBoundary}
                       />
                     </li>

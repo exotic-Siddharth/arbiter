@@ -51,6 +51,27 @@ describe('Markdown', () => {
     expect(external).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByRole('link', { name: 'home' })).not.toHaveAttribute('target');
   });
+
+  it('treats protocol-relative and look-alike origin links as external', () => {
+    const origin = window.location.origin;
+    render(
+      <Markdown
+        source={`[pr](//evil.com/x) [look](${origin}.evil.com/x) [userinfo](${origin}@evil.com/x) [same](${origin}/problems) [rel](/problems)`}
+      />,
+    );
+    for (const name of ['pr', 'look', 'userinfo']) {
+      const link = screen.getByRole('link', { name });
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
+    expect(screen.getByRole('link', { name: 'same' })).not.toHaveAttribute('target');
+    expect(screen.getByRole('link', { name: 'rel' })).not.toHaveAttribute('target');
+  });
+
+  it('renders no <img> for an unsafe image source', () => {
+    const { container } = render(<Markdown source="![i](javascript:alert(1))" />);
+    expect(container.querySelector('img')).toBeNull();
+  });
 });
 
 describe('Markdown with the real seed statements', () => {

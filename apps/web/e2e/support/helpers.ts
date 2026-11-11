@@ -60,3 +60,19 @@ export function trackForeignRequests(page: Page, origin: string) {
   });
   return foreign;
 }
+
+/**
+ * Names of the Socket.IO events the page has received over its WebSocket (e.g.
+ * 'submission:test', 'submission:done'). Lets a test prove the live path works even though
+ * the UI also polls as a fallback. The client uses the websocket transport first.
+ */
+export function trackSocketEvents(page: Page) {
+  const names: string[] = [];
+  page.on('websocket', (socket) => {
+    socket.on('framereceived', ({ payload }) => {
+      const match = /^42\d*\["([^"]+)"/.exec(String(payload));
+      if (match?.[1]) names.push(match[1]);
+    });
+  });
+  return names;
+}

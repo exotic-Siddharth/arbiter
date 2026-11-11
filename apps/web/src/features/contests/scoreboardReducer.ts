@@ -132,6 +132,16 @@ function applyRow(state: ScoreboardState, row: ScoreRow, at: number): Scoreboard
   if (index >= 0) {
     working = state.rows.slice();
     const current = state.rows[index] as LiveScoreRow;
+    // A row that worsened and stays last on a full page may now rank behind the next page's
+    // first row, which is not loaded here.
+    const lastOnFullPage = index === state.rows.length - 1 && state.rows.length >= state.pageSize;
+    if (
+      lastOnFullPage &&
+      compareScore(row, current) > 0 &&
+      state.total > state.page * state.pageSize
+    ) {
+      stale = true;
+    }
     // Keep the current markers; the rank comparison below sets new ones if the row moves.
     working[index] = {
       ...row,

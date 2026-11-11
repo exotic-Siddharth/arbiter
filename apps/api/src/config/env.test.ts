@@ -57,6 +57,28 @@ describe('parseEnv', () => {
     ).toBe(false);
   });
 
+  it('refuses the published development JWT secret and admin seed password in production', () => {
+    const devSecret = 'dev-only-insecure-access-secret-change-me-0000';
+    expect(() => parseEnv({ JWT_ACCESS_SECRET: devSecret, NODE_ENV: 'production' })).toThrow(
+      /JWT_ACCESS_SECRET is a published development value/,
+    );
+    expect(() =>
+      parseEnv({ ...secret, NODE_ENV: 'production', SEED_ADMIN_PASSWORD: 'admin12345' }),
+    ).toThrow(/SEED_ADMIN_PASSWORD is the published development password/);
+    // Development and test keep using the example values; a real production config is accepted.
+    for (const NODE_ENV of ['development', 'test']) {
+      expect(parseEnv({ JWT_ACCESS_SECRET: devSecret, NODE_ENV }).JWT_ACCESS_SECRET).toBe(
+        devSecret,
+      );
+    }
+    const prod = parseEnv({
+      ...secret,
+      NODE_ENV: 'production',
+      SEED_ADMIN_PASSWORD: 'a-long-random-password',
+    });
+    expect(prod.isProduction).toBe(true);
+  });
+
   it('turns demo login and the admin seed default off outside development', () => {
     const prod = parseEnv({ ...secret, NODE_ENV: 'production' });
     expect(prod.DEMO_LOGIN_ENABLED).toBe(false);

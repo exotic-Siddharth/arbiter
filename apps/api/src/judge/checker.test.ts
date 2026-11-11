@@ -83,4 +83,27 @@ describe('check', () => {
       expect(check('FLOAT', '1', '1 2')).toBe(false);
     });
   });
+
+  describe('Unicode whitespace is not a separator (A-48)', () => {
+    const NBSP = String.fromCharCode(0xa0);
+    const EM_SPACE = String.fromCharCode(0x2003);
+    const BOM = String.fromCharCode(0xfeff);
+
+    it('TOKENS: NBSP / U+2003 / U+FEFF do not separate tokens', () => {
+      expect(check('TOKENS', '1 2\n', `1${NBSP}2\n`)).toBe(false);
+      expect(check('TOKENS', '1 2\n', `1${EM_SPACE}2\n`)).toBe(false);
+      expect(check('TOKENS', '1 2\n', `1 ${BOM}2\n`)).toBe(false);
+      expect(check('TOKENS', '1 2\n', '1\f2\v')).toBe(true);
+    });
+
+    it('FLOAT: NBSP does not separate tokens either', () => {
+      expect(check('FLOAT', '1 2', `1${NBSP}2`)).toBe(false);
+    });
+
+    it('EXACT: trailing NBSP / U+2003 is not trimmed', () => {
+      expect(check('EXACT', 'a\nb\n', `a${NBSP}\nb\n`)).toBe(false);
+      expect(check('EXACT', 'a\nb\n', `a\nb${EM_SPACE}\n`)).toBe(false);
+      expect(check('EXACT', 'a\nb\n', 'a \r\nb\t\n\n')).toBe(true);
+    });
+  });
 });

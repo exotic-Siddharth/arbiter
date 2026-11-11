@@ -3,6 +3,8 @@ import type { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
+import { issueRefreshToken } from '../auth/tokens';
+import { setUserRole } from './users.service';
 import { resetTables, setupTestDatabase } from '../../../test/db';
 import {
   authHeader,
@@ -29,9 +31,11 @@ describe('admin users', () => {
     expect(ErrorBodySchema.parse(res.body).error.code).toBe('FORBIDDEN');
   });
 
-  it('PATCH /api/admin/users/:id is 403 for a USER', async () => {
+  it('PATCH /api/admin/users/:id is 401 for a guest and 403 for a USER', async () => {
     const user = await createUser(prisma);
     const target = await createUser(prisma);
+    const guest = await request(app).patch(`/api/admin/users/${target.id}`).send({ role: 'ADMIN' });
+    expect(guest.status).toBe(401);
     const res = await request(app)
       .patch(`/api/admin/users/${target.id}`)
       .set(authHeader(user))
@@ -130,11 +134,61 @@ describe('admin users', () => {
   it('refuses to demote the last remaining admin (409)', async () => {
     await prisma.user.updateMany({ where: { role: 'ADMIN' }, data: { role: 'USER' } });
     const only = await createUser(prisma, { role: 'ADMIN' });
-    const res = await request(app)
-      .patch(`/api/admin/users/${only.id}`)
-      .set(authHeader(only))
-      .send({ role: 'USER' });
-    expect(res.status).toBe(409);
+    // The caller is another (stale) admin id: the service-level guard is what is under test.
+    await expect(setUserRole(prisma, 'someone-else', only.id, 'USER')).rejects.toMatchObject({
+      status: 409,
+    });
     expect((await prisma.user.findUniqueOrThrow({ where: { id: only.id } })).role).toBe('ADMIN');
+  });
+
+  it('a demoted admin loses admin access at once (DB role re-checked), not after the token expires', async () => {
+    const a = await createUser(prisma, { role: 'ADMIN' });
+    const b = await createUser(prisma, { role: 'ADMIN' });
+    const staleB = authHeader(b); // minted while B was still an admin
+    const demote = await request(app)
+      .patch(`/api/admin/users/${b.id}`)
+      .set(authHeader(a))
+      .send({ role: 'USER' });
+    expect(demote.status).toBe(200);
+
+    const list = await request(app).get('/api/admin/users').set(staleB);
+    expect(list.status).toBe(403);
+    const repromote = await request(app)
+      .patch(`/api/admin/users/${b.id}`)
+      .set(staleB)
+      .send({ role: 'ADMIN' });
+    expect(repromote.status).toBe(403);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: b.id } })).role).toBe('USER');
+  });
+
+  it('an admin token of a deleted user is 401', async () => {
+    const ghost = await createUser(prisma, { role: 'ADMIN' });
+    const header = authHeader(ghost);
+    await prisma.user.delete({ where: { id: ghost.id } });
+    expect((await request(app).get('/api/admin/users').set(header)).status).toBe(401);
+  });
+
+  it('demoting a user revokes their refresh tokens', async () => {
+    const a = await createUser(prisma, { role: 'ADMIN' });
+    const b = await createUser(prisma, { role: 'ADMIN' });
+    const issued = await issueRefreshToken(prisma, b.id);
+    await request(app)
+      .patch(`/api/admin/users/${b.id}`)
+      .set(authHeader(a))
+      .send({ role: 'USER' })
+      .expect(200);
+    const record = await prisma.refreshToken.findUniqueOrThrow({ where: { id: issued.record.id } });
+    expect(record.revokedAt).not.toBeNull();
+  });
+
+  it('PATCH refuses to change your own role (403)', async () => {
+    const a = await createUser(prisma, { role: 'ADMIN' });
+    await createUser(prisma, { role: 'ADMIN' });
+    const res = await request(app)
+      .patch(`/api/admin/users/${a.id}`)
+      .set(authHeader(a))
+      .send({ role: 'USER' });
+    expect(res.status).toBe(403);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: a.id } })).role).toBe('ADMIN');
   });
 });

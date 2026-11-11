@@ -89,6 +89,7 @@ export function ExistingContest({ id }: { id: string }) {
               initial={contestToForm(loaded)}
               isNew={false}
               onSave={save}
+              ratedLocked={loaded.ratedAt !== null}
             />
             <RatingsCard contest={loaded} />
             <PlagiarismRunCard contest={loaded} />

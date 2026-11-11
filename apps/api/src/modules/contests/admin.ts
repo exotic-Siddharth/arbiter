@@ -11,7 +11,7 @@ import { badRequest, conflict, notFound } from '../../lib/errors';
 import { paginate, toPage } from '../../lib/pagination';
 import { clock, contestStatus, toIso, toIsoOrNull } from '../../lib/time';
 import { computeRatingDeltas } from './rating';
-import { invalidateScoreboard, loadStandings } from './scoreboard';
+import { countedWhere, invalidateScoreboard, loadStandings } from './scoreboard';
 
 /** Admin contest CRUD and rating (spec section 10, /api/admin/contests). Owner: lane A3b. */
 
@@ -28,7 +28,7 @@ const adminInclude = {
 
 type AdminContestRow = Prisma.ContestGetPayload<{ include: typeof adminInclude }>;
 
-function toAdminContest(row: AdminContestRow): AdminContest {
+function toAdminContest(row: AdminContestRow, pendingSubmissions: number): AdminContest {
   return {
     id: row.id,
     slug: row.slug,
@@ -41,6 +41,7 @@ function toAdminContest(row: AdminContestRow): AdminContest {
     ratedAt: toIsoOrNull(row.ratedAt),
     status: contestStatus(row, clock.now()),
     participantCount: row._count.registrations,
+    pendingSubmissions,
     problems: row.problems.map((cp) => ({
       problemId: cp.problemId,
       label: cp.label,
@@ -52,6 +53,12 @@ function toAdminContest(row: AdminContestRow): AdminContest {
     updatedAt: toIso(row.updatedAt),
   };
 }
+
+/** Counted contest submissions that have no verdict yet (rating waits for them). */
+const countPending = (client: Prisma.TransactionClient | PrismaClient, contestId: string) =>
+  client.submission.count({
+    where: { ...countedWhere(contestId), status: { in: ['QUEUED', 'COMPILING', 'RUNNING'] } },
+  });
 
 const isUniqueViolation = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
@@ -131,7 +138,7 @@ export async function listAdminContests(
 export async function getAdminContest(prisma: PrismaClient, id: string): Promise<AdminContest> {
   const row = await prisma.contest.findUnique({ where: { id }, include: adminInclude });
   if (!row) throw notFound('Contest not found');
-  return toAdminContest(row);
+  return toAdminContest(row, await countPending(prisma, id));
 }
 
 export async function createAdminContest(
@@ -144,21 +151,53 @@ export async function createAdminContest(
       data: { ...contestData(body), problems: { create: problemRows(body) } },
       include: adminInclude,
     });
-    return toAdminContest(row);
+    return toAdminContest(row, 0);
   } catch (error) {
     if (isUniqueViolation(error)) throw conflict('Slug already taken');
     throw error;
   }
 }
 
-/** Full replace, problem list included; drops the cached scoreboard. */
+/** True when `body` alters the times, penalty or problem list a rated contest was scored with. */
+function changesRatedStandings(
+  existing: {
+    startsAt: Date;
+    endsAt: Date;
+    penaltyMinutes: number;
+    problems: { problemId: string; label: string }[];
+  },
+  body: AdminContestBody,
+): boolean {
+  return (
+    new Date(body.startsAt).getTime() !== existing.startsAt.getTime() ||
+    new Date(body.endsAt).getTime() !== existing.endsAt.getTime() ||
+    body.penaltyMinutes !== existing.penaltyMinutes ||
+    JSON.stringify(body.problems.map((p) => [p.problemId, p.label])) !==
+      JSON.stringify(existing.problems.map((p) => [p.problemId, p.label]))
+  );
+}
+
+/** Full replace, problem list included; drops the cached scoreboard. Rated contests: see above. */
 export async function updateAdminContest(
   prisma: PrismaClient,
   id: string,
   body: AdminContestBody,
 ): Promise<AdminContest> {
-  const existing = await prisma.contest.findUnique({ where: { id }, select: { id: true } });
+  const existing = await prisma.contest.findUnique({
+    where: { id },
+    select: {
+      ratedAt: true,
+      startsAt: true,
+      endsAt: true,
+      penaltyMinutes: true,
+      problems: { orderBy: { ordinal: 'asc' }, select: { problemId: true, label: true } },
+    },
+  });
   if (!existing) throw notFound('Contest not found');
+  // The ratings were computed from the final standings: what defines them stays fixed.
+  if (existing.ratedAt && changesRatedStandings(existing, body)) {
+    throw conflict('A rated contest keeps its times, penalty and problems');
+  }
   await assertProblemsExist(prisma, body);
   try {
     const row = await prisma.$transaction(async (tx) => {
@@ -170,7 +209,7 @@ export async function updateAdminContest(
       });
     });
     await invalidateScoreboard(id);
-    return toAdminContest(row);
+    return toAdminContest(row, await countPending(prisma, id));
   } catch (error) {
     if (isUniqueViolation(error)) throw conflict('Slug already taken');
     throw error;
@@ -178,15 +217,22 @@ export async function updateAdminContest(
 }
 
 export async function deleteAdminContest(prisma: PrismaClient, id: string): Promise<void> {
-  const { count } = await prisma.contest.deleteMany({ where: { id } });
-  if (count === 0) throw notFound('Contest not found');
+  // Deleting would cascade the RatingChange history while the deltas stay in User.rating.
+  const { count } = await prisma.contest.deleteMany({ where: { id, ratedAt: null } });
+  if (count === 0) {
+    if (await prisma.contest.findUnique({ where: { id }, select: { id: true } })) {
+      throw conflict('A rated contest cannot be deleted');
+    }
+    throw notFound('Contest not found');
+  }
   await invalidateScoreboard(id);
 }
 
 /**
- * POST /api/admin/contests/:id/rate: pairwise Elo over the final standings. 409 before the end or
- * when already rated. RatingChange rows, user ratings and ratedAt are written in one transaction;
- * the conditional ratedAt update makes concurrent calls safe (only one wins).
+ * POST /api/admin/contests/:id/rate: pairwise Elo over the final standings. 409 before the end,
+ * while counted submissions are still being judged, or when already rated. RatingChange rows, user
+ * ratings and ratedAt are written in one transaction; the conditional ratedAt update makes
+ * concurrent calls safe (only one wins).
  */
 export async function rateContest(prisma: PrismaClient, id: string): Promise<RateContestResponse> {
   const contest = await prisma.contest.findUnique({ where: { id } });
@@ -195,7 +241,14 @@ export async function rateContest(prisma: PrismaClient, id: string): Promise<Rat
   if (contestStatus(contest, now) !== 'ENDED') throw conflict('The contest has not ended yet');
   if (contest.ratedAt) throw conflict('The contest is already rated');
 
+  const userIds: string[] = [];
   const changes = await prisma.$transaction(async (tx) => {
+    // Ratings are absolute values shared across contests: apply one contest at a time (the lock
+    // ends with the transaction), so concurrent calls neither lose an update nor deadlock on rows.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('arbiter:rate-contest'))`;
+    // Provisional standings must never become final: wait until every counted submission has a verdict.
+    const judging = await countPending(tx, id);
+    if (judging > 0) throw conflict(`Judging is still in progress (${judging} submissions)`);
     const claimed = await tx.contest.updateMany({
       where: { id, ratedAt: null },
       data: { ratedAt: now },
@@ -219,11 +272,18 @@ export async function rateContest(prisma: PrismaClient, id: string): Promise<Rat
         },
       });
       await tx.user.update({ where: { id: row.userId }, data: { rating: newRating } });
+      userIds.push(row.userId);
       result.push({ username: row.username, oldRating: row.rating, newRating, rank: row.rank });
     }
     return result;
   }, RATE_TRANSACTION_OPTIONS);
-  // Rows carry the users' ratings: rebuild them on the next read.
-  await invalidateScoreboard(id);
+  // Rows carry the users' ratings: rebuild them on the next read, here and in every other contest
+  // the rated users take part in.
+  const others = await prisma.contestRegistration.findMany({
+    where: { userId: { in: userIds }, contestId: { not: id } },
+    select: { contestId: true },
+    distinct: ['contestId'],
+  });
+  await Promise.all([id, ...others.map((other) => other.contestId)].map(invalidateScoreboard));
   return { changes };
 }

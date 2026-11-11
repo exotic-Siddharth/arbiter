@@ -10,7 +10,7 @@ import { prisma as defaultPrisma } from './db/prisma';
 import type { AppDeps } from './lib/deps';
 import { httpLogger } from './lib/logger';
 import { httpMetrics } from './lib/metrics';
-import { RATE_LIMITS, rateLimit, type RateLimitsConfig } from './lib/rateLimit';
+import { RATE_LIMITS, clientIpKey, rateLimit, type RateLimitsConfig } from './lib/rateLimit';
 import { getRedis } from './lib/redis';
 import { errorHandler } from './middleware/error';
 import { notFoundHandler } from './middleware/notFound';
@@ -69,7 +69,7 @@ const securityHeaders: RequestHandler = (req, res, next) => {
 const apiRateLimit = rateLimit({
   name: 'api',
   ...RATE_LIMITS.api,
-  key: (req) => req.ip ?? 'unknown',
+  key: (req) => clientIpKey(req.ip),
 });
 
 /** The Express app (no listen): used by src/index.ts and by Supertest. */

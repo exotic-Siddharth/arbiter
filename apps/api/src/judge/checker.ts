@@ -10,12 +10,16 @@ export const DEFAULT_FLOAT_TOLERANCE = 1e-6;
 
 const NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
 
+/** ASCII whitespace only: JS \s would also split on NBSP, U+2003, U+FEFF (A-48). */
+const ASCII_WHITESPACE = /[ \t\r\n\f\v]+/;
+const TRAILING_ASCII_WHITESPACE = /[ \t\r\n\f\v]+$/;
+
 function tokens(text: string): string[] {
-  return text.split(/\s+/).filter((token) => token.length > 0);
+  return text.split(ASCII_WHITESPACE).filter((token) => token.length > 0);
 }
 
 function exactLines(text: string): string[] {
-  const lines = text.split('\n').map((line) => line.trimEnd());
+  const lines = text.split('\n').map((line) => line.replace(TRAILING_ASCII_WHITESPACE, ''));
   while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
   return lines;
 }

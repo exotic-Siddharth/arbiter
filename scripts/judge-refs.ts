@@ -57,6 +57,25 @@ const PASSWORD = args.get('password') ?? apiEnvValue('SEED_ADMIN_PASSWORD', 'adm
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** The access token expires after 15 minutes: callers pass any non-null token, call() uses this one. */
+const session: { token: string | null; refreshing: Promise<boolean> | null } = {
+  token: null,
+  refreshing: null,
+};
+
+/** Log in as USERNAME and keep the access token in `session`; false when the login is refused. */
+async function login(): Promise<boolean> {
+  const response = await fetch(`${API}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier: USERNAME, password: PASSWORD }),
+  });
+  const json = (await response.json().catch(() => null)) as { accessToken?: string } | null;
+  if (response.status !== 200 || !json?.accessToken) return false;
+  session.token = json.accessToken;
+  return true;
+}
+
 async function call<T>(
   method: string,
   path: string,
@@ -68,10 +87,17 @@ async function call<T>(
     method,
     headers: {
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${session.token ?? token}` } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  if (response.status === 401 && token && retry < 20) {
+    // Expired access token: log in again once (shared by concurrent callers) and retry.
+    session.refreshing ??= login().finally(() => {
+      session.refreshing = null;
+    });
+    if (await session.refreshing) return call(method, path, token, body, retry + 1);
+  }
   if (response.status === 429 && retry < 20) {
     const wait = Number(response.headers.get('retry-after') ?? 10);
     console.error(
@@ -128,6 +154,8 @@ async function judge(job: Job, token: string): Promise<Outcome> {
     if (res.status === 200) {
       const detail = SubmissionDetailSchema.parse(res.json);
       if (detail.status === 'DONE' || detail.status === 'FAILED') return { job, detail };
+    } else if (res.status !== 404) {
+      return { job, detail: null, error: `GET /submissions/${id} answered ${res.status}` };
     }
     await sleep(400);
   }
@@ -193,18 +221,12 @@ async function checkPlagiarismQueue(token: string): Promise<string | null> {
 async function main(): Promise<void> {
   const jobs = collectJobs();
   if (jobs.length === 0) throw new Error('No reference programs found under seed/problems');
-  const login = await call<{ accessToken?: string; error?: { message: string } }>(
-    'POST',
-    '/auth/login',
-    null,
-    { identifier: USERNAME, password: PASSWORD },
-  );
-  if (login.status !== 200 || !login.json.accessToken) {
+  if (!(await login())) {
     throw new Error(
-      `Login as ${USERNAME} failed (${login.status}): is the API up on ${API} and the database seeded?`,
+      `Login as ${USERNAME} failed: is the API up on ${API} and the database seeded?`,
     );
   }
-  const token = login.json.accessToken;
+  const token = session.token as string;
   console.log(`Judging ${jobs.length} programs through ${API}, ${IN_FLIGHT} in flight...`);
 
   const outcomes: Outcome[] = [];

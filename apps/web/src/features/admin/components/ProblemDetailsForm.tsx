@@ -1,5 +1,5 @@
 import { DIFFICULTIES, DIFFICULTY_IDS, type AdminProblemBody } from '@arbiter/shared';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import {
   Alert,
   Button,
@@ -19,6 +19,7 @@ import {
   type ProblemReference,
 } from '../lib/problemForm';
 import { MarkdownEditor } from './MarkdownEditor';
+import { UnsavedChangesGuard } from './UnsavedChangesGuard';
 
 const CHECKERS = [
   { value: 'TOKENS', label: 'Tokens (ignore whitespace differences)' },
@@ -53,6 +54,7 @@ export function ProblemDetailsForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const savingRef = useRef(false);
 
   const update = <K extends keyof ProblemFormState>(key: K, value: ProblemFormState[K]) => {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -75,6 +77,7 @@ export function ProblemDetailsForm({
     }
     setErrors({});
     setSaving(true);
+    savingRef.current = true;
     try {
       await onSave(result.body);
       setDirty(false);
@@ -90,6 +93,7 @@ export function ProblemDetailsForm({
         setFormError(getErrorMessage(error));
       }
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -98,6 +102,7 @@ export function ProblemDetailsForm({
 
   return (
     <form onSubmit={(event) => void submit(event)} noValidate className="space-y-5">
+      <UnsavedChangesGuard dirty={dirty} savingRef={savingRef} />
       {formError ? (
         <Alert tone="danger" title="Could not save the problem">
           {formError}

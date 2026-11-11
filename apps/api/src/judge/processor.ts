@@ -110,6 +110,11 @@ async function judgeSubmission(submissionId: string, finalAttempt: boolean): Pro
   const { problem, language } = submission;
   const tests = problem.testCases;
   const testsTotal = tests.length;
+  if (testsTotal === 0) {
+    // Nothing to compare against: every compiling program would pass vacuously (A-02).
+    await failSubmission(submission, 'The problem has no test cases', startedAt);
+    return;
+  }
 
   // A retried job starts from a clean slate.
   await prisma.$transaction([
@@ -363,23 +368,30 @@ async function finishSubmission(
 async function failSubmission(
   submission: LoadedSubmission,
   message: string,
-  startedAt: number,
+  startedAt: number | undefined,
 ): Promise<void> {
   const errorMessage = message.slice(0, ERROR_MESSAGE_CHARS);
   log.error({ submissionId: submission.id, err: errorMessage }, 'submission failed (IE)');
-  await prisma.submission.update({
-    where: { id: submission.id },
+  // Conditional: never overwrite a submission that ended meanwhile (late processor, sweeper).
+  const { count } = await prisma.submission.updateMany({
+    where: { id: submission.id, status: { notIn: ['DONE', 'FAILED'] } },
     data: { status: 'FAILED', verdict: 'IE', errorMessage, judgedAt: new Date() },
   });
+  if (count === 0) {
+    log.warn({ submissionId: submission.id }, 'submission already ended; failure discarded');
+    return;
+  }
   const current = await prisma.submission.findUnique({
     where: { id: submission.id },
     select: { testsPassed: true, timeMs: true, memoryKb: true },
   });
   judgeJobsTotal.inc({ verdict: 'IE', language: submission.language });
-  judgeJobDuration.observe(
-    { language: submission.language },
-    (performance.now() - startedAt) / 1000,
-  );
+  if (startedAt !== undefined) {
+    judgeJobDuration.observe(
+      { language: submission.language },
+      (performance.now() - startedAt) / 1000,
+    );
+  }
   safeEmit('submission:done', () =>
     emitter.emitSubmissionDone(
       {
@@ -395,6 +407,16 @@ async function failSubmission(
     ),
   );
   await updateScoreboard(submission);
+}
+
+/**
+ * Ends a submission whose job is gone for good (failed out of BullMQ, stalled twice, lost with
+ * Redis): FAILED/IE unless it already ended, then the done event and the scoreboard row.
+ */
+export async function failLostSubmission(submissionId: string, message: string): Promise<void> {
+  const submission = await loadSubmission(submissionId);
+  if (!submission || submission.status === 'DONE' || submission.status === 'FAILED') return;
+  await failSubmission(submission, message, undefined);
 }
 
 /** R3: after any terminal state of a contest submission, recompute and emit the user's row. */

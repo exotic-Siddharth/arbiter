@@ -197,6 +197,15 @@ describe('scoreOf', () => {
       scoreOf({ solved: 2, penalty: 0 }),
     );
   });
+
+  it('keeps solved first even when the penalty passes 10^7 (A-50)', () => {
+    expect(scoreOf({ solved: 26, penalty: 10_900_000 })).toBeGreaterThan(
+      scoreOf({ solved: 25, penalty: 0 }),
+    );
+    expect(scoreOf({ solved: 1, penalty: 50_000_000 })).toBeGreaterThan(
+      scoreOf({ solved: 0, penalty: 0 }),
+    );
+  });
 });
 
 describe('fixture contest (hand-computed)', () => {

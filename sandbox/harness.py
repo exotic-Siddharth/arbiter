@@ -17,10 +17,15 @@ Events (harness -> worker):
    "stderr"(b64),"outputLimitExceeded","wallKilled"}
   {"type":"error","message"}
 
+Resource facts cover the whole process tree of a test (A-05): the harness is a child subreaper,
+so a descendant the program forked and never wait()ed for is reaped by the harness after the
+kill, and its CPU time and peak RSS are added to the direct child's wait4 rusage.
+
 Expected outputs never enter the container: the worker compares outputs itself.
 """
 
 import base64
+import ctypes
 import json
 import math
 import os
@@ -33,6 +38,7 @@ import threading
 import time
 
 PROTOCOL_VERSION = 1
+PR_SET_CHILD_SUBREAPER = 36
 RUNNER_UID = 10001
 RUNNER_GID = 10001
 WORK_DIR = "/work"
@@ -178,6 +184,37 @@ def kill_all_runner_processes():
         time.sleep(0.005)
 
 
+def become_subreaper():
+    """Make orphaned runner descendants children of the harness instead of tini, so their
+    rusage can be collected (A-05). Returns False when the kernel refuses: the harness then
+    still works, but only the direct child's resources are measured."""
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        return libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) == 0
+    except (OSError, AttributeError):
+        return False
+
+
+def reap_orphans():
+    """Collect every descendant that was reparented to the harness (the submission forked it and
+    exited without wait()ing, or it was killed with the tree). Returns (cpu seconds, peak
+    ru_maxrss in KB) over all of them. Only call after kill_all_runner_processes(): every runner
+    process is then a zombie, and the direct child has been reaped already. A descendant the
+    program did wait() for is already inside the direct child's wait4 rusage."""
+    cpu_s = 0.0
+    max_rss_kb = 0
+    while True:
+        try:
+            pid, _status, usage = os.wait4(-1, os.WNOHANG)
+        except ChildProcessError:
+            break
+        if pid == 0:
+            break
+        cpu_s += usage.ru_utime + usage.ru_stime
+        max_rss_kb = max(max_rss_kb, int(usage.ru_maxrss))
+    return cpu_s, max_rss_kb
+
+
 def kill_group(pgid):
     try:
         os.killpg(pgid, signal.SIGKILL)
@@ -297,6 +334,7 @@ def execute(argv, stdin_data, cpu_seconds, wall_s, fsize_bytes, nofile, as_bytes
     # Leftover processes (background children, setsid escapes) die before the next test.
     kill_group(pid)
     kill_all_runner_processes()
+    orphan_cpu_s, orphan_rss_kb = reap_orphans()
     writer.join(5)
     out.join(5)
     if err is not None:
@@ -312,9 +350,9 @@ def execute(argv, stdin_data, cpu_seconds, wall_s, fsize_bytes, nofile, as_bytes
     return {
         "exitCode": exit_code,
         "signal": sig,
-        "cpuMs": int(round((usage.ru_utime + usage.ru_stime) * 1000)),
+        "cpuMs": int(round((usage.ru_utime + usage.ru_stime + orphan_cpu_s) * 1000)),
         "wallMs": wall_ms,
-        "maxRssKb": int(usage.ru_maxrss),
+        "maxRssKb": max(int(usage.ru_maxrss), orphan_rss_kb),
         "stdout": bytes(out.buffer),
         "stderr": bytes(err.buffer) if err is not None else b"",
         "outputLimitExceeded": flags["ole"],
@@ -452,6 +490,7 @@ class Harness:
 
 
 def main():
+    become_subreaper()
     emit({"type": "ready", "version": PROTOCOL_VERSION, "pid": os.getpid()})
     harness = Harness()
     stdin = sys.stdin.buffer

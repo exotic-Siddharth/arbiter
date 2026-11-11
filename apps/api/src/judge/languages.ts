@@ -110,6 +110,15 @@ export const COMPILE_BUDGET_MS = 20_000;
 /** Upper bound of any container's lifetime; the janitor removes anything older (R17). */
 export const MAX_CONTAINER_LIFETIME_MS = 15 * 60_000;
 
+/** A session may wait this long for the harness `ready` event before the container deadline starts. */
+export const READY_TIMEOUT_MS = 60_000;
+/**
+ * The janitor removes any sandbox container older than this even when its worker is alive. It must
+ * outlast a live session (ready timeout + container deadline) plus slack, or a within-deadline
+ * judge loses its container (A-23).
+ */
+export const JANITOR_MAX_AGE_MS = READY_TIMEOUT_MS + MAX_CONTAINER_LIFETIME_MS + 60_000;
+
 /** Overall container deadline: compile 20 s + sum(wall + 1 s) + 10 s, capped (spec 8.4). */
 export function containerDeadlineMs(wallLimitMs: number, testCount: number): number {
   return Math.min(

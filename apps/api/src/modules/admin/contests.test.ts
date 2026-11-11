@@ -319,6 +319,46 @@ describe('POST /api/admin/contests/:id/rate', () => {
     expect(detail.body.ratedAt).toBe(after.ratedAt?.toISOString());
   });
 
+  it('409 while contest submissions are still being judged, 200 once they are done', async () => {
+    const { contest, winner } = await endedContest();
+    const problem = await prisma.contestProblem.findFirstOrThrow({
+      where: { contestId: contest.id },
+    });
+    const late = await createSubmission(prisma, {
+      userId: winner.id,
+      problemId: problem.problemId,
+      contestId: contest.id,
+      status: 'QUEUED',
+      verdict: null,
+    });
+    const pending = await request(app)
+      .get(`/api/admin/contests/${contest.id}`)
+      .set(authHeader(admin));
+    expect(pending.body.pendingSubmissions).toBe(1);
+    const blocked = await request(app)
+      .post(`/api/admin/contests/${contest.id}/rate`)
+      .set(authHeader(admin));
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.message).toMatch(/judging/i);
+    expect(
+      (await prisma.contest.findUniqueOrThrow({ where: { id: contest.id } })).ratedAt,
+    ).toBeNull();
+    expect(await prisma.ratingChange.count({ where: { contestId: contest.id } })).toBe(0);
+
+    await prisma.submission.update({
+      where: { id: late.id },
+      data: { status: 'DONE', verdict: 'WA' },
+    });
+    const settled = await request(app)
+      .get(`/api/admin/contests/${contest.id}`)
+      .set(authHeader(admin));
+    expect(settled.body.pendingSubmissions).toBe(0);
+    const ok = await request(app)
+      .post(`/api/admin/contests/${contest.id}/rate`)
+      .set(authHeader(admin));
+    expect(ok.status).toBe(200);
+  });
+
   it('409 before the end (running or upcoming) and 404 for unknown ids', async () => {
     const running = await createContest(prisma);
     const res = await request(app)
@@ -341,6 +381,100 @@ describe('POST /api/admin/contests/:id/rate', () => {
       .post('/api/admin/contests/no-such-id/rate')
       .set(authHeader(admin));
     expect(missing.status).toBe(404);
+  });
+
+  it('rating two contests that share users concurrently keeps every delta (no lost update, no deadlock)', async () => {
+    const problem = await createProblem(prisma);
+    for (let trial = 0; trial < 4; trial += 1) {
+      const users = await Promise.all([0, 1, 2].map(() => createUser(prisma, { rating: 1500 })));
+      const rated = async (order: typeof users) => {
+        const startsAt = new Date(Date.now() - 3 * HOUR);
+        const contest = await createContest(prisma, {
+          startsAt,
+          endsAt: new Date(Date.now() - HOUR),
+          problems: [{ problemId: problem.id, label: 'A' }],
+          registrations: order.map((u) => u.id),
+        });
+        for (const [index, u] of order.entries()) {
+          await createSubmission(prisma, {
+            userId: u.id,
+            problemId: problem.id,
+            contestId: contest.id,
+            status: 'DONE',
+            verdict: 'AC',
+            createdAt: new Date(startsAt.getTime() + (index + 1) * 600_000),
+          });
+        }
+        return contest;
+      };
+      const first = await rated(users);
+      const second = await rated([...users].reverse());
+      const results = await Promise.all(
+        [first, second].map((c) =>
+          request(app).post(`/api/admin/contests/${c.id}/rate`).set(authHeader(admin)),
+        ),
+      );
+      expect(results.map((r) => r.status)).toEqual([200, 200]);
+      for (const u of users) {
+        const changes = await prisma.ratingChange.findMany({ where: { userId: u.id } });
+        const total = changes.reduce((sum, c) => sum + (c.newRating - c.oldRating), 0);
+        const current = (await prisma.user.findUniqueOrThrow({ where: { id: u.id } })).rating;
+        expect(current).toBe(1500 + total);
+      }
+    }
+  });
+
+  it("rating a contest drops the cached boards of the rated users' other contests", async () => {
+    const { contest, winner } = await endedContest();
+    const other = await createContest(prisma, { registrations: [winner.id] });
+    await rebuildScoreboard(other.id);
+    await getRedis().zadd(scoreboardKeys(other.id).rank, 1, winner.id);
+    const res = await request(app)
+      .post(`/api/admin/contests/${contest.id}/rate`)
+      .set(authHeader(admin));
+    expect(res.status).toBe(200);
+    expect(await getRedis().exists(scoreboardKeys(other.id).rank)).toBe(0);
+  });
+
+  it('a rated contest cannot be deleted (409); its ratings and history stay', async () => {
+    const { contest, winner } = await endedContest();
+    const rate = await request(app)
+      .post(`/api/admin/contests/${contest.id}/rate`)
+      .set(authHeader(admin));
+    expect(rate.status).toBe(200);
+    const res = await request(app)
+      .delete(`/api/admin/contests/${contest.id}`)
+      .set(authHeader(admin));
+    expect(res.status).toBe(409);
+    expect(await prisma.contest.count({ where: { id: contest.id } })).toBe(1);
+    expect(await prisma.ratingChange.count({ where: { userId: winner.id } })).toBe(1);
+  });
+
+  it('a rated contest keeps its times, penalty and problems (409) but its text can change', async () => {
+    const { contest } = await endedContest();
+    await request(app).post(`/api/admin/contests/${contest.id}/rate`).set(authHeader(admin));
+    const detail = AdminContestSchema.parse(
+      (await request(app).get(`/api/admin/contests/${contest.id}`).set(authHeader(admin))).body,
+    );
+    const same = {
+      slug: detail.slug,
+      title: detail.title,
+      descriptionMd: detail.descriptionMd,
+      startsAt: detail.startsAt,
+      endsAt: detail.endsAt,
+      isPublished: detail.isPublished,
+      penaltyMinutes: detail.penaltyMinutes,
+      problems: detail.problems.map((p) => ({ problemId: p.problemId, label: p.label })),
+    };
+    const put = (payload: object) =>
+      request(app).put(`/api/admin/contests/${contest.id}`).set(authHeader(admin)).send(payload);
+    expect((await put({ ...same, title: 'Renamed round' })).status).toBe(200);
+    const reopened = hoursFromNow(5);
+    expect((await put({ ...same, endsAt: reopened })).status).toBe(409);
+    expect((await put({ ...same, penaltyMinutes: same.penaltyMinutes + 1 })).status).toBe(409);
+    expect((await put({ ...same, problems: [] })).status).toBe(409);
+    const after = await prisma.contest.findUniqueOrThrow({ where: { id: contest.id } });
+    expect(after.endsAt.toISOString()).toBe(detail.endsAt);
   });
 
   it('two concurrent rate calls apply the ratings only once', async () => {

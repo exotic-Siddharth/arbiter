@@ -120,4 +120,23 @@ describe('ProblemsPage', { timeout: 20_000 }, () => {
     expect(await screen.findByText('Database is down.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
+
+  it('moves to the last page when ?page is past the end', async () => {
+    const api = mockFetch({
+      'GET /api/problems': ({ query }) => {
+        const page = Number(query.get('page') ?? 1);
+        return jsonResponse(
+          200,
+          problemPage(page > 3 ? [] : problemSummaries, { page, pageSize: 20, total: 45 }),
+        );
+      },
+      'GET /api/tags': () => jsonResponse(200, tagCounts),
+    });
+    const { router } = renderWithProviders(<ProblemsPage />, { route: '/problems?page=99' });
+
+    await screen.findByRole('link', { name: 'Lantern Relay' });
+    expect(new URLSearchParams(router.state.location.search).get('page')).toBe('3');
+    expect(problemRequests(api).at(-1)?.query.get('page')).toBe('3');
+    expect(screen.queryByText(/no problems yet/i)).not.toBeInTheDocument();
+  });
 });

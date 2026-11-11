@@ -21,6 +21,7 @@ import { ContestSubmissions } from './components/ContestSubmissions';
 import { LiveScoreboard } from './components/LiveScoreboard';
 import { RegisterButton } from './components/RegisterButton';
 import { useContest } from './hooks/useContest';
+import { parsePageParam } from './lib/page';
 
 type Tab = 'problems' | 'scoreboard' | 'submissions';
 
@@ -42,8 +43,8 @@ export function Component() {
   const { slug = '' } = useParams();
   const user = useCurrentUser();
   const [params, setParams] = useSearchParams();
-  const { query, contest, offsetMs, boundary, evaluatedAt, onBoundary } = useContest(slug);
-  const scoreboardPage = Math.max(1, Number(params.get('page')) || 1);
+  const { query, contest, offsetMs, boundary, onBoundary } = useContest(slug);
+  const scoreboardPage = parsePageParam(params.get('page'));
 
   if (query.isPending) {
     return (
@@ -96,7 +97,6 @@ export function Component() {
         boundary={boundary}
         offsetMs={offsetMs}
         onBoundary={onBoundary}
-        evaluatedAt={evaluatedAt}
       />
 
       {description ? (

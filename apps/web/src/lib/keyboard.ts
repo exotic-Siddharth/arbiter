@@ -118,6 +118,8 @@ export function useHotkey(
     const onKeyDown = (event: KeyboardEvent) => {
       const match = list.find((c) => matchesHotkey(event, c));
       if (!match) return;
+      // A modal Dialog makes #root inert: page shortcuts must not act behind it.
+      if (document.getElementById('root')?.hasAttribute('inert')) return;
       const parsed = parseCombo(match);
       const hasModifier = parsed.mod || parsed.ctrl || parsed.alt;
       if (isTypingTarget(event.target) && !(allowInInputs ?? hasModifier)) return;

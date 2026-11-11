@@ -32,14 +32,15 @@ route(
     method: 'patch',
     path: '/:id',
     summary: "Change a user's role",
-    description: 'The last remaining admin cannot be demoted (409).',
+    description:
+      'You cannot change your own role (403). The last remaining admin cannot be demoted (409).',
     tags: ['Admin: users'],
     auth: 'admin',
     request: { params: IdParams, body: PatchUserRoleBody },
     responses: { 200: AdminUserResponseSchema, 404: 'User not found', 409: 'Last admin' },
   },
   async (req, res) => {
-    const user = await setUserRole(getDeps(req).prisma, req.params.id, req.body.role);
+    const user = await setUserRole(getDeps(req).prisma, req.user!.id, req.params.id, req.body.role);
     res.json({ user });
   },
 );

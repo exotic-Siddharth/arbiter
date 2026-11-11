@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../../db/prisma';
 import { logger } from '../../lib/logger';
 import { clock } from '../../lib/time';
-import { fingerprints, matchedLines, similarity, tokenize, type Fingerprint } from './winnow';
+import { fingerprints, hashSet, matchedLines, overlap, tokenize, type Fingerprint } from './winnow';
 
 /**
  * Runs a PlagiarismReport (winnowing, spec section 9): sets status RUNNING, compares the
@@ -35,13 +35,17 @@ export function pickCandidates<T extends CandidateFields>(submissions: readonly 
   return [...byUser.values()].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
+/** Lets timers, the heartbeat and BullMQ lock renewals of this shared worker process run. */
+const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve));
+
 async function comparePairs(
   reportId: string,
   contestId: string,
   problemId: string,
   threshold: number,
 ): Promise<Prisma.PlagiarismPairCreateManyInput[]> {
-  const submissions: (CandidateFields & { language: Language; sourceCode: string })[] =
+  // Pick the candidates from light rows first; sources are loaded only for the chosen ones.
+  const submissions: (CandidateFields & { language: Language })[] =
     await prisma.submission.findMany({
       where: {
         contestId,
@@ -49,23 +53,29 @@ async function comparePairs(
         kind: 'NORMAL',
         user: { registrations: { some: { contestId } } },
       },
-      select: {
-        id: true,
-        userId: true,
-        language: true,
-        sourceCode: true,
-        createdAt: true,
-        verdict: true,
-      },
+      select: { id: true, userId: true, language: true, createdAt: true, verdict: true },
     });
   const candidates = pickCandidates(submissions);
-  const prints: Fingerprint[][] = candidates.map((c) =>
-    fingerprints(tokenize(c.language, c.sourceCode)),
+  const sources = new Map(
+    (
+      await prisma.submission.findMany({
+        where: { id: { in: candidates.map((c) => c.id) } },
+        select: { id: true, sourceCode: true },
+      })
+    ).map((s) => [s.id, s.sourceCode]),
   );
+  const prints: Fingerprint[][] = [];
+  const sets: Set<bigint>[] = [];
+  for (const c of candidates) {
+    const print = fingerprints(tokenize(c.language, sources.get(c.id) ?? ''));
+    prints.push(print);
+    sets.push(hashSet(print));
+    await yieldToEventLoop();
+  }
   const pairs: Prisma.PlagiarismPairCreateManyInput[] = [];
   for (let i = 0; i < candidates.length; i += 1) {
     for (let j = i + 1; j < candidates.length; j += 1) {
-      const score = similarity(prints[i], prints[j]);
+      const score = overlap(sets[i], sets[j]);
       if (score === 0 || score < threshold) continue;
       const lines = matchedLines(prints[i], prints[j]);
       pairs.push({
@@ -78,6 +88,7 @@ async function comparePairs(
         matchedLinesB: lines.b,
       });
     }
+    await yieldToEventLoop();
   }
   return pairs;
 }

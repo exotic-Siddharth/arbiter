@@ -39,4 +39,19 @@ describe('keyboard shortcuts (jsdom is not macOS, so Mod = Ctrl)', () => {
     expect(submit).toHaveBeenCalledTimes(1);
     expect(search).toHaveBeenCalledTimes(1);
   });
+
+  it('useHotkey stays quiet while a modal dialog has made #root inert', () => {
+    const submit = vi.fn();
+    const root = document.createElement('div');
+    root.id = 'root';
+    document.body.append(root);
+    renderHook(() => useHotkey('Mod+Enter', submit));
+    root.setAttribute('inert', '');
+    document.body.dispatchEvent(key({ key: 'Enter', ctrlKey: true }));
+    expect(submit).not.toHaveBeenCalled();
+    root.removeAttribute('inert');
+    document.body.dispatchEvent(key({ key: 'Enter', ctrlKey: true }));
+    expect(submit).toHaveBeenCalledTimes(1);
+    root.remove();
+  });
 });

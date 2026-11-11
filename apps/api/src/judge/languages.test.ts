@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { LANGUAGE_CONFIG, containerDeadlineMs, deriveLimits } from './languages';
+import {
+  JANITOR_MAX_AGE_MS,
+  LANGUAGE_CONFIG,
+  MAX_CONTAINER_LIFETIME_MS,
+  READY_TIMEOUT_MS,
+  containerDeadlineMs,
+  deriveLimits,
+} from './languages';
 
 const problem = { timeLimitMs: 1000, memoryLimitMb: 256 };
 
@@ -76,5 +83,13 @@ describe('containerDeadlineMs', () => {
   it('is compile 20 s + sum(wall + 1 s) + 10 s, capped at 15 minutes', () => {
     expect(containerDeadlineMs(3000, 5)).toBe(20_000 + 5 * 4000 + 10_000);
     expect(containerDeadlineMs(21_000, 100)).toBe(15 * 60_000);
+  });
+});
+
+describe('janitor age cap (A-23)', () => {
+  it('outlasts the longest session deadline: ready timeout + container deadline', () => {
+    const longestSessionMs = READY_TIMEOUT_MS + containerDeadlineMs(1_000_000, 1000);
+    expect(longestSessionMs).toBe(READY_TIMEOUT_MS + MAX_CONTAINER_LIFETIME_MS);
+    expect(JANITOR_MAX_AGE_MS).toBeGreaterThan(longestSessionMs);
   });
 });

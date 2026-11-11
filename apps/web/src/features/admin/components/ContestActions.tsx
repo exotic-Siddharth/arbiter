@@ -125,6 +125,7 @@ export function RatingsCard({ contest }: { contest: AdminContest }) {
 
   const rated = contest.ratedAt !== null || result !== null;
   const notEnded = contest.status !== 'ENDED';
+  const judging = contest.pendingSubmissions;
 
   return (
     <Card>
@@ -136,7 +137,7 @@ export function RatingsCard({ contest }: { contest: AdminContest }) {
           <Button
             size="sm"
             leftIcon={<Scale />}
-            disabled={rated || notEnded}
+            disabled={rated || notEnded || judging > 0}
             onClick={() => setConfirmOpen(true)}
           >
             Apply ratings
@@ -155,6 +156,11 @@ export function RatingsCard({ contest }: { contest: AdminContest }) {
           <p className="text-sm text-muted">
             Available after the contest ends (
             {contest.status === 'RUNNING' ? 'it is running now' : 'it has not started'}).
+          </p>
+        ) : judging > 0 ? (
+          <p className="text-sm text-muted">
+            {pluralize(judging, 'submission')} {judging === 1 ? 'is' : 'are'} still being judged.
+            Ratings can be applied once every counted submission has a verdict.
           </p>
         ) : (
           <p className="text-sm text-muted">

@@ -1,4 +1,6 @@
+import { RotateCcw } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { Button } from './Button';
 import { ErrorState } from './EmptyState';
 import { PageSpinner } from './Spinner';
 
@@ -50,7 +52,7 @@ export function QueryState<T>({
       </div>
     );
   }
-  if (query.isError || query.data === undefined) {
+  if (query.data === undefined) {
     return (
       <ErrorState
         error={query.error}
@@ -61,6 +63,28 @@ export function QueryState<T>({
       />
     );
   }
-  if (empty !== undefined && isEmpty?.(query.data)) return <>{empty}</>;
-  return <>{children(query.data)}</>;
+  // A failed background refetch keeps the data TanStack still holds: show it with a banner.
+  const body =
+    empty !== undefined && isEmpty?.(query.data) ? <>{empty}</> : <>{children(query.data)}</>;
+  if (!query.isError) return body;
+  return (
+    <>
+      <div
+        role="status"
+        className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-control border border-warning/30 bg-warning/10 px-3 py-2 text-[13px] text-foreground"
+      >
+        <span>Could not refresh this data. Showing what was loaded earlier.</span>
+        <Button
+          variant="secondary"
+          size="sm"
+          leftIcon={<RotateCcw />}
+          loading={query.isFetching}
+          onClick={() => void query.refetch()}
+        >
+          Try again
+        </Button>
+      </div>
+      {body}
+    </>
+  );
 }

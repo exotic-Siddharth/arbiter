@@ -5,6 +5,8 @@ import { enqueueGenerateOutputs, enqueueSubmission } from './queue';
 
 /** Admin judge operations behind /api/admin (modules/admin/judge.routes.ts). */
 
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
 async function problemWithReference(prisma: PrismaClient, problemId: string) {
   const problem = await prisma.problem.findUnique({
     where: { id: problemId },
@@ -19,6 +21,7 @@ async function problemWithReference(prisma: PrismaClient, problemId: string) {
   if (!problem.referenceLanguage || !problem.referenceSolution?.trim()) {
     throw conflict('The problem has no reference solution');
   }
+  if (problem._count.testCases === 0) throw conflict('The problem has no test cases');
   return {
     id: problem.id,
     language: problem.referenceLanguage,
@@ -46,7 +49,21 @@ export async function validateReference(
     },
     select: { id: true },
   });
-  await enqueueSubmission(submission.id);
+  try {
+    await enqueueSubmission(submission.id);
+  } catch (error) {
+    // Never leave a REFERENCE submission QUEUED forever: end it as FAILED/IE and report the error.
+    await prisma.submission.update({
+      where: { id: submission.id },
+      data: {
+        status: 'FAILED',
+        verdict: 'IE',
+        errorMessage: `The judge queue is unavailable: ${messageOf(error)}`.slice(0, 2000),
+        judgedAt: new Date(),
+      },
+    });
+    throw error;
+  }
   return { submissionId: submission.id };
 }
 
@@ -60,7 +77,19 @@ export async function startGenerateOutputs(
     data: { type: 'GENERATE_OUTPUTS', problemId: problem.id, total: problem.testCount },
     select: { id: true },
   });
-  await enqueueGenerateOutputs(job.id);
+  try {
+    await enqueueGenerateOutputs(job.id);
+  } catch (error) {
+    await prisma.adminJob.update({
+      where: { id: job.id },
+      data: {
+        status: 'FAILED',
+        error: `The judge queue is unavailable: ${messageOf(error)}`.slice(0, 2000),
+        finishedAt: new Date(),
+      },
+    });
+    throw error;
+  }
   return { jobId: job.id };
 }
 

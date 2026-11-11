@@ -244,6 +244,22 @@ describe('processJudgeJob: submissions', () => {
     expect(counters).toMatchObject({ submissionCount: 0, acceptedCount: 0 });
   });
 
+  it('a problem with no test cases ends FAILED/IE and never counts as accepted (A-02)', async () => {
+    const problem = await createProblem(prisma, { tests: [] });
+    const submission = await createSubmission(prisma, {
+      userId: user.id,
+      problemId: problem.id,
+      sourceCode: PY_SUM,
+    });
+    await judge(submission.id);
+
+    const judged = await prisma.submission.findUniqueOrThrow({ where: { id: submission.id } });
+    expect(judged).toMatchObject({ status: 'FAILED', verdict: 'IE', testsTotal: 0 });
+    expect(judged.errorMessage).toMatch(/no test cases/i);
+    const counters = await prisma.problem.findUniqueOrThrow({ where: { id: problem.id } });
+    expect(counters.acceptedCount).toBe(0);
+  });
+
   it('missing image yields IE with message', async () => {
     env.SANDBOX_IMAGE = 'arbiter-sandbox:missing-for-test';
     const problem = await createProblem(prisma);

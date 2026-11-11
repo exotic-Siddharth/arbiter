@@ -1,5 +1,5 @@
 import type { AdminContestBody } from '@arbiter/shared';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Alert, Button, Card, CardContent, CardHeader, Input, Switch } from '@/components/ui';
 import { fieldErrors, getErrorMessage, isApiError } from '@/lib/api';
 import {
@@ -11,20 +11,24 @@ import {
 import { localTimeZone } from '../lib/datetime';
 import { ContestProblemsEditor } from './ContestProblemsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
+import { UnsavedChangesGuard } from './UnsavedChangesGuard';
 
 export interface ContestFormProps {
   initial?: ContestFormState;
   isNew: boolean;
   onSave: (body: AdminContestBody) => Promise<void>;
+  /** Rated contest: times, penalty and problems are fixed (the API answers 409). */
+  ratedLocked?: boolean;
 }
 
 /** Contest editor form: details, schedule, penalty, problem picker with labels. */
-export function ContestForm({ initial, isNew, onSave }: ContestFormProps) {
+export function ContestForm({ initial, isNew, onSave, ratedLocked = false }: ContestFormProps) {
   const [form, setForm] = useState<ContestFormState>(() => initial ?? emptyContestForm());
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const savingRef = useRef(false);
   const zone = localTimeZone();
 
   const update = <K extends keyof ContestFormState>(key: K, value: ContestFormState[K]) => {
@@ -48,6 +52,7 @@ export function ContestForm({ initial, isNew, onSave }: ContestFormProps) {
     }
     setErrors({});
     setSaving(true);
+    savingRef.current = true;
     try {
       await onSave(result.body);
       setDirty(false);
@@ -56,13 +61,14 @@ export function ContestForm({ initial, isNew, onSave }: ContestFormProps) {
       if (Object.keys(fields).length > 0) {
         setErrors(fields);
         setFormError('The server rejected some fields.');
-      } else if (isApiError(error) && error.status === 409) {
+      } else if (isApiError(error) && error.status === 409 && /slug/i.test(error.message)) {
         setErrors({ slug: getErrorMessage(error) });
         setFormError('That slug is already used by another contest.');
       } else {
         setFormError(getErrorMessage(error));
       }
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -76,9 +82,16 @@ export function ContestForm({ initial, isNew, onSave }: ContestFormProps) {
 
   return (
     <form onSubmit={(event) => void submit(event)} noValidate className="space-y-5">
+      <UnsavedChangesGuard dirty={dirty} savingRef={savingRef} />
       {formError ? (
         <Alert tone="danger" title="Could not save the contest">
           {formError}
+        </Alert>
+      ) : null}
+      {ratedLocked ? (
+        <Alert tone="info" title="Ratings were computed from this contest">
+          Its times, penalty and problems are fixed. The title, description and visibility can still
+          change.
         </Alert>
       ) : null}
       <Card>
@@ -117,6 +130,7 @@ export function ContestForm({ initial, isNew, onSave }: ContestFormProps) {
             type="datetime-local"
             label="Starts"
             value={form.startsAt}
+            disabled={ratedLocked}
             onChange={(event) => update('startsAt', event.target.value)}
             error={errors.startsAt}
           />
@@ -124,6 +138,7 @@ export function ContestForm({ initial, isNew, onSave }: ContestFormProps) {
             type="datetime-local"
             label="Ends"
             value={form.endsAt}
+            disabled={ratedLocked}
             onChange={(event) => update('endsAt', event.target.value)}
             error={errors.endsAt}
             hint={
@@ -137,6 +152,7 @@ export function ContestForm({ initial, isNew, onSave }: ContestFormProps) {
             inputMode="numeric"
             className="font-mono"
             value={form.penaltyMinutes}
+            disabled={ratedLocked}
             onChange={(event) => update('penaltyMinutes', event.target.value)}
             error={errors.penaltyMinutes}
             hint="Added per wrong attempt, 0 to 240"
@@ -144,11 +160,13 @@ export function ContestForm({ initial, isNew, onSave }: ContestFormProps) {
         </CardContent>
       </Card>
 
-      <ContestProblemsEditor
-        problems={form.problems}
-        errors={errors}
-        onChange={(problems: ContestFormProblem[]) => update('problems', problems)}
-      />
+      <fieldset disabled={ratedLocked} className="m-0 min-w-0 border-0 p-0">
+        <ContestProblemsEditor
+          problems={form.problems}
+          errors={errors}
+          onChange={(problems: ContestFormProblem[]) => update('problems', problems)}
+        />
+      </fieldset>
 
       <Card>
         <CardHeader

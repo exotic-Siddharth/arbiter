@@ -162,6 +162,7 @@ export function Component() {
                           icon={<Trash2 />}
                           variant="ghost"
                           size="sm"
+                          disabled={contest.ratedAt !== null}
                           onClick={() => setPendingDelete(contest)}
                         />
                       </Td>

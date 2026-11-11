@@ -42,9 +42,14 @@ const isCountedWrong = (s: Pick<ScoringSubmission, 'status' | 'verdict'>) =>
 const byTime = (a: ScoringSubmission, b: ScoringSubmission) =>
   a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
-/** Redis ZSET score: solved x 10^7 - penalty (higher is better). */
+const SCORE_BASE = 10_000_000;
+
+/**
+ * Redis ZSET score: solved x 10^7 - penalty (higher is better). The penalty is clamped below the
+ * base so that one more solved problem always outranks any penalty, however long the contest.
+ */
 export function scoreOf(row: { solved: number; penalty: number }): number {
-  return row.solved * 10_000_000 - row.penalty;
+  return row.solved * SCORE_BASE - Math.min(row.penalty, SCORE_BASE - 1);
 }
 
 /** Earliest AC time per problemId over every participant's submissions. */

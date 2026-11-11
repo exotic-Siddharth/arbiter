@@ -1,10 +1,11 @@
 import { AuthResponseSchema, ErrorBodySchema, MeResponseSchema } from '@arbiter/shared';
 import type { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../app';
 import { env } from '../../config/env';
 import { verifyAccessToken } from '../../lib/jwt';
+import * as password from '../../lib/password';
 import { TEST_PASSWORD, authHeader, createUser, uniqueSuffix } from '../../../test/factories';
 import { setupTestDatabase } from '../../../test/db';
 import { hashToken, rotateRefreshToken } from './tokens';
@@ -70,6 +71,14 @@ describe('POST /api/auth/register', () => {
     expect(tokens).toHaveLength(1);
     expect(tokens[0].tokenHash).toBe(hashToken(cookie?.value ?? ''));
     expect(tokens[0].tokenHash).not.toBe(cookie?.value);
+  });
+
+  it('reserves the usernames demo and admin (case-insensitive): 409 with field username', async () => {
+    for (const username of ['demo', 'Demo', 'ADMIN']) {
+      const { res } = await register({ username });
+      expect(res.status, username).toBe(409);
+      expect(res.body.error.details).toMatchObject({ field: 'username' });
+    }
   });
 
   it('stores the email lower-case', async () => {
@@ -147,18 +156,35 @@ describe('POST /api/auth/login', () => {
     expect(refreshCookie(wrong)).toBeUndefined();
   });
 
-  it('spends comparable time on an unknown user (dummy hash verification)', async () => {
+  it('runs the dummy hash verification for an unknown user, and only then', async () => {
+    const user = await createUser(prisma);
+    const dummy = vi.spyOn(password, 'verifyDummyPassword');
+    const attempt = (identifier: string) =>
+      request(app).post('/api/auth/login').send({ identifier, password: 'definitely-wrong' });
+    await attempt(user.username);
+    expect(dummy).not.toHaveBeenCalled();
+    await attempt(`ghost_${unique()}`);
+    expect(dummy).toHaveBeenCalledTimes(1);
+    dummy.mockRestore();
+  });
+
+  it('spends comparable time on an unknown user (median of several samples)', async () => {
     const user = await createUser(prisma);
     const timeIt = async (identifier: string) => {
       const start = performance.now();
       await request(app).post('/api/auth/login').send({ identifier, password: 'definitely-wrong' });
       return performance.now() - start;
     };
+    const median = (values: number[]) => [...values].sort((x, y) => x - y)[values.length >> 1];
     await timeIt(user.username); // warm up
-    const known = await timeIt(user.username);
-    const unknown = await timeIt(`ghost_${unique()}`);
+    const known: number[] = [];
+    const unknown: number[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      known.push(await timeIt(user.username));
+      unknown.push(await timeIt(`ghost_${unique()}`));
+    }
     // An unknown user must not be answered immediately: Argon2 verify takes tens of ms.
-    expect(unknown).toBeGreaterThan(known * 0.4);
+    expect(median(unknown)).toBeGreaterThan(median(known) * 0.4);
   });
 });
 
@@ -235,6 +261,26 @@ describe('refresh rotation', () => {
     });
     const res = await request(app).post('/api/auth/refresh').set('Cookie', `arb_rt=${token}`);
     expect(res.status).toBe(401);
+  });
+
+  it('a server error during refresh (5xx) keeps the cookie: the token still works afterwards', async () => {
+    const { user, token } = await login();
+    const broken = new Proxy(prisma, {
+      get: (target, key) =>
+        key === 'refreshToken'
+          ? { findUnique: () => Promise.reject(new Error('connection lost')) }
+          : Reflect.get(target, key),
+    });
+    const failed = await request(createApp({ rateLimits: false, prisma: broken }))
+      .post('/api/auth/refresh')
+      .set('Cookie', `arb_rt=${token}`);
+    expect(failed.status).toBe(500);
+    expect(refreshCookie(failed)).toBeUndefined();
+    const retry = await request(app).post('/api/auth/refresh').set('Cookie', `arb_rt=${token}`);
+    expect(retry.status).toBe(200);
+    expect(await prisma.refreshToken.count({ where: { userId: user.id, revokedAt: null } })).toBe(
+      1,
+    );
   });
 
   it('concurrent rotation of the same token lets exactly one caller win', async () => {
@@ -363,6 +409,14 @@ describe('POST /api/auth/demo', () => {
     } finally {
       env.DEMO_LOGIN_ENABLED = previous;
     }
+  });
+
+  it('404 when the account named demo is not a plain USER (never hand out an admin session)', async () => {
+    await prisma.user.deleteMany({ where: { usernameLower: 'demo' } });
+    await createUser(prisma, { username: 'demo', email: 'demo@example.test', role: 'ADMIN' });
+    const res = await request(demoApp()).post('/api/auth/demo');
+    expect(res.status).toBe(404);
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('404 when the demo user does not exist', async () => {

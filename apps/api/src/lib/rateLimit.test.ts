@@ -5,7 +5,7 @@ import request from 'supertest';
 import { afterAll, describe, expect, it } from 'vitest';
 import { errorHandler } from '../middleware/error';
 import type { RateLimitsConfig } from './rateLimit';
-import { isLimiterEnabled, rateLimit } from './rateLimit';
+import { clientIpKey, isLimiterEnabled, rateLimit } from './rateLimit';
 import { getRedis } from './redis';
 
 function appWith(options: { limit: number; rateLimits?: RateLimitsConfig; redis?: Redis }) {
@@ -103,5 +103,25 @@ describe('rateLimit', () => {
       // Give the store's eager SCRIPT LOAD promises time to settle inside this test.
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
+  });
+});
+
+describe('clientIpKey', () => {
+  it('leaves IPv4 addresses unchanged and unwraps IPv4-mapped IPv6', () => {
+    expect(clientIpKey('203.0.113.7')).toBe('203.0.113.7');
+    expect(clientIpKey('::ffff:203.0.113.7')).toBe('203.0.113.7');
+    expect(clientIpKey('::ffff:cb00:7107')).toBe('203.0.113.7');
+  });
+
+  it('puts every address of one IPv6 /64 in the same bucket, and other /64s in another', () => {
+    const a = clientIpKey('2001:db8:abcd:12::1');
+    expect(clientIpKey('2001:db8:abcd:12::2')).toBe(a);
+    expect(clientIpKey('2001:0DB8:abcd:0012:ffff:ffff:ffff:ffff')).toBe(a);
+    expect(clientIpKey('2001:db8:abcd:13::1')).not.toBe(a);
+    expect(clientIpKey('::1')).toBe(clientIpKey('::2'));
+  });
+
+  it('falls back to "unknown" without an address', () => {
+    expect(clientIpKey(undefined)).toBe('unknown');
   });
 });

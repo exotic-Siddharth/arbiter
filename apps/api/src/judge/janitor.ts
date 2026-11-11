@@ -3,13 +3,13 @@ import { env } from '../config/env';
 import { logger } from '../lib/logger';
 import { getRedis } from '../lib/redis';
 import { HEARTBEAT_INTERVAL_MS, heartbeatKey } from './heartbeat';
-import { MAX_CONTAINER_LIFETIME_MS } from './languages';
+import { JANITOR_MAX_AGE_MS } from './languages';
 import { PREFIX_LABEL, SANDBOX_LABEL, WORKER_LABEL, runDocker } from './sandbox';
 
 /**
  * Removes sandbox containers left over by crashed workers (spec 8.8, R17). Only containers with
  * this deployment's arbiter.prefix label are considered, and only those whose worker heartbeat
- * is gone or that are older than the longest possible container lifetime.
+ * is gone or that are older than the longest possible session (ready timeout + container lifetime + slack).
  */
 export async function removeStaleSandboxes(
   options: {
@@ -61,7 +61,7 @@ export async function removeStaleSandboxes(
     const [id, created, workerId, name] = line.trim().split('\t');
     if (!id || !created) continue;
     const container = { id, name: (name ?? id).replace(/^\//, '') };
-    if (now - Date.parse(created) > MAX_CONTAINER_LIFETIME_MS) stale.push(container);
+    if (now - Date.parse(created) > JANITOR_MAX_AGE_MS) stale.push(container);
     else if (!(await isAlive(workerId))) orphanCandidates.push({ ...container, workerId });
   }
   if (orphanCandidates.length > 0) {

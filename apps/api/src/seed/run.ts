@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { env } from '../config/env';
 import { prisma } from '../db/prisma';
 import { hashPassword } from '../lib/password';
+import { getRedis } from '../lib/redis';
 import { clock } from '../lib/time';
 import { rateContest } from '../modules/contests/admin';
 import { runPlagiarismReport } from '../modules/plagiarism/service';
@@ -209,13 +210,32 @@ function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) : text;
 }
 
-/** Wipes every application table (never the migration history). */
+const SCOREBOARD_KEY = /^contest:[^:]+:(rank|rows|updatedAt|lock)$/;
+
+/**
+ * The seed ids are deterministic, so a scoreboard cache left over from an earlier seed would
+ * resurface for the new rows. Deletes contest:<id>:{rank,rows,updatedAt,lock} only (the same
+ * Redis holds BullMQ and Socket.IO keys, so no FLUSHDB).
+ */
+export async function clearScoreboardCaches(): Promise<void> {
+  const redis = getRedis();
+  let cursor = '0';
+  do {
+    const [next, keys] = await redis.scan(cursor, 'MATCH', 'contest:*', 'COUNT', 500);
+    cursor = next;
+    const stale = keys.filter((key) => SCOREBOARD_KEY.test(key));
+    if (stale.length > 0) await redis.del(...stale);
+  } while (cursor !== '0');
+}
+
+/** Wipes every application table (never the migration history) and the scoreboard caches. */
 async function wipe(): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE "PlagiarismPair", "PlagiarismReport", "AdminJob", "RatingChange", ' +
       '"SubmissionTestResult", "Submission", "ContestRegistration", "ContestProblem", "Contest", ' +
       '"ProblemTag", "Tag", "TestCase", "Problem", "RefreshToken", "User" RESTART IDENTITY CASCADE',
   );
+  await clearScoreboardCaches();
 }
 
 async function insertInChunks<T>(

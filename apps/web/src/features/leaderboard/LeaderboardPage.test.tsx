@@ -53,4 +53,23 @@ describe('LeaderboardPage', () => {
     renderWithProviders(<LeaderboardPage />, { route: '/leaderboard' });
     expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
+
+  it('moves to the last page when ?page is past the end', async () => {
+    const api = mockFetch({
+      'GET /api/leaderboard': ({ query }) => {
+        const requested = Number(query.get('page') ?? 1);
+        return jsonResponse(200, {
+          items: requested > 2 ? [] : entries,
+          total: 40,
+          page: requested,
+          pageSize: 25,
+        });
+      },
+    });
+    const { router } = renderWithProviders(<LeaderboardPage />, { route: '/leaderboard?page=99' });
+    await screen.findByText('grace');
+    expect(new URLSearchParams(router.state.location.search).get('page')).toBe('2');
+    expect(api.requests.at(-1)?.query.get('page')).toBe('2');
+    expect(screen.queryByText(/no ranked players/i)).not.toBeInTheDocument();
+  });
 });

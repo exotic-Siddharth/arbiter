@@ -1,7 +1,7 @@
 import { ScoreRowSchema, ScoreboardSchema, type ScoreRow } from '@arbiter/shared';
 import type { Contest, PrismaClient, User } from '@prisma/client';
 import request from 'supertest';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDatabase, resetTables } from '../../../test/db';
 import {
   createContest,
@@ -11,6 +11,7 @@ import {
 } from '../../../test/factories';
 import { createApp } from '../../app';
 import { getRedis } from '../../lib/redis';
+import { emitter } from '../../realtime/emitter';
 import {
   FIXTURE_EXPECTED,
   FIXTURE_LABELS,
@@ -98,6 +99,10 @@ function expectFixtureRows(rows: ScoreRow[], users: Record<FixtureUser, User>) {
 beforeAll(async () => {
   prisma = await setupTestDatabase();
   await resetTables(prisma);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('scoreboard cache', () => {
@@ -237,6 +242,116 @@ describe('scoreboard cache', () => {
     const board = await getScoreboard(contest.id, 1, 50);
     const bob = board.rows.find((r) => r.username === users.bob.username);
     expect(bob?.cells[0]).toMatchObject({ label: 'A', solved: true, firstSolve: false });
+  });
+
+  it('pushes the rows that lose firstSolve to live clients when an earlier AC is judged late', async () => {
+    const { contest, users, problemIds } = await seedFixture();
+    await rebuildScoreboard(contest.id);
+    const emitted = vi.spyOn(emitter, 'emitScoreboardRow').mockImplementation(() => undefined);
+    const late = await createSubmission(prisma, {
+      userId: users.eve.id,
+      problemId: problemIds.A,
+      contestId: contest.id,
+      createdAt: at(8),
+    });
+    await prisma.submission.update({
+      where: { id: late.id },
+      data: { status: 'DONE', verdict: 'AC' },
+    });
+    await recomputeRow(contest.id, users.eve.id);
+    const rows = emitted.mock.calls.map(([id, payload]) => {
+      expect(id).toBe(contest.id);
+      return payload.row;
+    });
+    const bob = rows.find((r) => r.username === users.bob.username);
+    expect(bob?.cells[0]).toMatchObject({ label: 'A', solved: true, firstSolve: false });
+    expect(ScoreRowSchema.safeParse(bob).success).toBe(true);
+    expect(emitted.mock.calls[0][1].contestSlug).toBe(contest.slug);
+  });
+
+  it('concurrent recomputes of one user never leave the older snapshot as the cached row', async () => {
+    const problem = await createProblem(prisma);
+    const user = await createUser(prisma);
+    const contest = await createContest(prisma, {
+      startsAt: T0,
+      endsAt: new Date(Date.now() + 60 * 60 * 1000),
+      problems: [{ problemId: problem.id, label: 'A' }],
+      registrations: [user.id],
+    });
+    const submission = await createSubmission(prisma, {
+      userId: user.id,
+      problemId: problem.id,
+      contestId: contest.id,
+      status: 'RUNNING',
+      createdAt: at(10),
+    });
+    await rebuildScoreboard(contest.id);
+
+    // Recompute A reads the pending submission, then stalls before it writes.
+    const redis = getRedis();
+    const hmget = redis.hmget.bind(redis) as (...args: string[]) => Promise<(string | null)[]>;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let reached: () => void = () => undefined;
+    const stalled = new Promise<void>((resolve) => (reached = resolve));
+    vi.spyOn(redis, 'hmget').mockImplementationOnce((async (...args: string[]) => {
+      reached();
+      await gate;
+      return hmget(...args);
+    }) as never);
+    const first = recomputeRow(contest.id, user.id);
+    await stalled;
+
+    // The verdict lands and a second recompute runs while A is stalled.
+    await prisma.submission.update({
+      where: { id: submission.id },
+      data: { status: 'DONE', verdict: 'AC' },
+    });
+    const second = recomputeRow(contest.id, user.id);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    release();
+    await Promise.all([first, second]);
+
+    const board = await getScoreboard(contest.id, 1, 50);
+    expect(board.rows).toHaveLength(1);
+    expect(board.rows[0]).toMatchObject({ solved: 1 });
+    expect(board.rows[0]?.cells[0]).toMatchObject({ solved: true, pending: false });
+  });
+
+  it('never leaves a one-row cache when the keys vanish between the built-check and the write', async () => {
+    const { contest, users } = await seedFixture();
+    await rebuildScoreboard(contest.id);
+    const keys = scoreboardKeys(contest.id);
+    const redis = getRedis();
+    const exists = redis.exists.bind(redis) as (...args: string[]) => Promise<number>;
+    // An admin edit invalidates the cache right after recomputeRow saw it built (isBuilt).
+    const spy = vi.spyOn(redis, 'exists').mockImplementationOnce((async (...args: string[]) => {
+      const built = await exists(...args);
+      await redis.del(keys.rank, keys.rows, keys.updatedAt);
+      return built;
+    }) as never);
+    const row = await recomputeRow(contest.id, users.dave.id);
+    spy.mockRestore();
+    expect(row).toMatchObject({ solved: 2, penalty: 57 });
+    expect(await getRedis().zcard(keys.rank)).toBe(FIXTURE_USERS.length);
+    const board = await getScoreboard(contest.id, 1, 50);
+    expect(board.total).toBe(FIXTURE_USERS.length);
+    expectFixtureRows(board.rows, users);
+  });
+
+  it('builds the full board after waiting on a lock whose holder died without building', async () => {
+    const { contest, users } = await seedFixture();
+    const keys = scoreboardKeys(contest.id);
+    await getRedis().del(keys.rank, keys.rows, keys.updatedAt);
+    await getRedis().set(keys.lock, 'dead-holder', 'PX', 300);
+    const board = await getScoreboard(contest.id, 1, 50);
+    expect(board.total).toBe(FIXTURE_USERS.length);
+    expectFixtureRows(board.rows, users);
+
+    await getRedis().del(keys.rank, keys.rows, keys.updatedAt);
+    await getRedis().set(keys.lock, 'dead-holder', 'PX', 300);
+    await recomputeRow(contest.id, users.dave.id);
+    expect(await getRedis().zcard(keys.rank)).toBe(FIXTURE_USERS.length);
   });
 
   it('returns null for a non-participant and an empty board for a contest without submissions', async () => {

@@ -15,7 +15,7 @@ import { emitter } from '../../realtime/emitter';
 import { recomputeRow } from '../contests/scoreboard';
 import {
   submissionDetailInclude,
-  submissionSummaryInclude,
+  submissionSummarySelect,
   toSubmissionDetail,
   toSubmissionSummary,
 } from './mappers';
@@ -71,13 +71,15 @@ async function refreshScoreboardRow(
 /**
  * Where a submission with `contestSlug` belongs (spec section 9):
  * running + registered = contest submission; ended = practice; not started or unregistered = 403.
+ * The contest is checked before the problem, and a missing problem and one outside the contest
+ * answer alike, so an upcoming contest's problem list (or a draft slug) cannot be probed.
  */
 async function resolveContest(
   prisma: PrismaClient,
   contestSlug: string,
-  problemId: string,
+  problemSlug: string,
   viewer: Viewer,
-): Promise<{ id: string; slug: string } | null> {
+): Promise<{ contest: { id: string; slug: string } | null; problemId: string }> {
   const contest = await prisma.contest.findUnique({
     where: { slug: contestSlug },
     select: {
@@ -86,22 +88,23 @@ async function resolveContest(
       isPublished: true,
       startsAt: true,
       endsAt: true,
-      problems: { where: { problemId }, select: { problemId: true } },
+      problems: { where: { problem: { slug: problemSlug } }, select: { problemId: true } },
     },
   });
   if (!contest || (!contest.isPublished && !isAdmin(viewer))) {
     throw notFound('Contest not found');
   }
-  if (contest.problems.length === 0) throw notFound('Problem is not part of this contest');
   const status = contestStatus(contest, clock.now());
   if (status === 'UPCOMING') throw forbidden('The contest has not started yet');
-  if (status === 'ENDED') return null;
+  const member = contest.problems[0];
+  if (!member) throw notFound('Problem not found');
+  if (status === 'ENDED') return { contest: null, problemId: member.problemId };
   const registration = await prisma.contestRegistration.findUnique({
     where: { contestId_userId: { contestId: contest.id, userId: viewer.id } },
     select: { userId: true },
   });
   if (!registration) throw forbidden('Register for the contest to submit during it');
-  return { id: contest.id, slug: contest.slug };
+  return { contest: { id: contest.id, slug: contest.slug }, problemId: member.problemId };
 }
 
 /** POST /api/submissions: store a QUEUED submission and enqueue it for judging. */
@@ -110,16 +113,18 @@ export async function createSubmission(
   body: CreateSubmissionBody,
   viewer: Viewer,
 ): Promise<SubmissionSummary> {
+  let contest: { id: string; slug: string } | null = null;
+  let where: Prisma.ProblemWhereUniqueInput = { slug: body.problemSlug };
+  if (body.contestSlug !== undefined) {
+    const resolved = await resolveContest(prisma, body.contestSlug, body.problemSlug, viewer);
+    contest = resolved.contest;
+    where = { id: resolved.problemId };
+  }
   const problem = await prisma.problem.findUnique({
-    where: { slug: body.problemSlug },
+    where,
     select: { id: true, isPublished: true, _count: { select: { testCases: true } } },
   });
-  if (!problem) throw notFound('Problem not found');
-
-  let contest: { id: string; slug: string } | null = null;
-  if (body.contestSlug !== undefined) {
-    contest = await resolveContest(prisma, body.contestSlug, problem.id, viewer);
-  } else if (!problem.isPublished && !isAdmin(viewer)) {
+  if (!problem || (body.contestSlug === undefined && !problem.isPublished && !isAdmin(viewer))) {
     throw notFound('Problem not found');
   }
 
@@ -133,7 +138,7 @@ export async function createSubmission(
       sourceCode: body.sourceCode,
       testsTotal: problem._count.testCases,
     },
-    include: submissionSummaryInclude,
+    select: submissionSummarySelect,
   });
 
   let queueError: unknown;
@@ -151,7 +156,7 @@ export async function createSubmission(
         judgedAt: clock.now(),
         errorMessage: `Could not queue the submission for judging: ${detail}`.slice(0, 2000),
       },
-      include: submissionSummaryInclude,
+      select: submissionSummarySelect,
     });
   }
 
@@ -187,7 +192,7 @@ export async function listSubmissions(
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: pagination.skip,
       take: pagination.take,
-      include: submissionSummaryInclude,
+      select: submissionSummarySelect,
     }),
   ]);
   return toPage(rows.map(toSubmissionSummary), total, pagination);

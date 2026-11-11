@@ -11,8 +11,16 @@ const rehypePlugins: NonNullable<ComponentProps<typeof ReactMarkdown>['rehypePlu
   [rehypeKatex, { throwOnError: false, strict: 'ignore', output: 'htmlAndMathml' }],
 ];
 
+/** Resolved against the current page, so "//host" counts and "http://site.example.evil" does not. */
 function isExternal(href: string | undefined): boolean {
-  return !!href && /^https?:\/\//i.test(href) && !href.startsWith(window.location.origin);
+  if (!href) return false;
+  try {
+    const url = new URL(href, window.location.href);
+    return /^https?:$/.test(url.protocol) && url.origin !== window.location.origin;
+  } catch {
+    // Unparseable: only an absolute http(s) lookalike (e.g. "http://site:3000.evil.com") matters.
+    return /^https?:\/\//i.test(href);
+  }
 }
 
 const components: Components = {
@@ -31,7 +39,9 @@ const components: Components = {
       <table {...props} />
     </div>
   ),
-  img: ({ node: _node, alt, ...props }) => <img alt={alt ?? ''} loading="lazy" {...props} />,
+  // An unsafe source is stripped to "": render nothing rather than an <img src="">.
+  img: ({ node: _node, alt, ...props }) =>
+    props.src ? <img alt={alt ?? ''} loading="lazy" {...props} /> : null,
 };
 
 export interface MarkdownProps {

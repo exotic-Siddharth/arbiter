@@ -72,6 +72,7 @@ export function adminContest(overrides: Partial<AdminContest> = {}): AdminContes
     ratedAt: null,
     status: 'ENDED',
     participantCount: 48,
+    pendingSubmissions: 0,
     problems: [
       { problemId: 'p1', label: 'A', ordinal: 0, slug: 'lantern-rows', title: 'Lantern Rows' },
       { problemId: 'p2', label: 'B', ordinal: 1, slug: 'ferry-schedule', title: 'Ferry Schedule' },

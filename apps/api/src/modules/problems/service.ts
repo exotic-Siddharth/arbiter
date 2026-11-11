@@ -11,7 +11,8 @@ import { paginate, toPage } from '../../lib/pagination';
 import {
   acceptanceRate,
   problemDetailInclude,
-  problemSummaryInclude,
+  problemDetailOmit,
+  problemSummarySelect,
   toProblemDetail,
   toProblemSummary,
 } from './mappers';
@@ -146,7 +147,7 @@ export async function listProblems(
   ]);
   const rows = await prisma.problem.findMany({
     where: { id: { in: ids } },
-    include: problemSummaryInclude,
+    select: problemSummarySelect,
   });
   const byId = new Map(rows.map((row) => [row.id, row]));
   const statuses = await userStatuses(prisma, viewer?.id, ids);
@@ -163,7 +164,11 @@ export async function getProblemDetail(
   slug: string,
   viewer: Viewer | undefined,
 ): Promise<ProblemDetail> {
-  const row = await prisma.problem.findUnique({ where: { slug }, include: problemDetailInclude });
+  const row = await prisma.problem.findUnique({
+    where: { slug },
+    include: problemDetailInclude,
+    omit: problemDetailOmit,
+  });
   if (!row || (!row.isPublished && viewer?.role !== 'ADMIN')) {
     throw notFound('Problem not found');
   }

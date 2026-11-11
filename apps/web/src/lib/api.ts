@@ -28,6 +28,8 @@ export interface RequestOptions<T> {
   headers?: HeadersInit;
   /** false = send no access token and never refresh (default true). */
   auth?: boolean;
+  /** Called with the final response (after any token retry), e.g. to read its Date header. */
+  onResponse?: (response: Response) => void;
 }
 
 /**
@@ -70,6 +72,7 @@ async function request<T>(
     const renewed = await renewToken(token);
     if (renewed) response = await sendOnce(renewed);
   }
+  options.onResponse?.(response);
   return parseResponse(response, options.schema);
 }
 

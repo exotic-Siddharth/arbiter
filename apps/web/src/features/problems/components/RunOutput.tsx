@@ -25,7 +25,16 @@ export interface RunOutputProps {
 }
 
 /** Output of a custom-input run (stdout, stderr, compile output, sample comparison). */
-export function RunOutput({ phase, result, sample }: RunOutputProps) {
+export function RunOutput(props: RunOutputProps) {
+  // Always mounted, so screen readers hear the running state and then the outcome.
+  return (
+    <div role="status" aria-live="polite">
+      <RunOutputBody {...props} />
+    </div>
+  );
+}
+
+function RunOutputBody({ phase, result, sample }: RunOutputProps) {
   if (phase === 'starting' || phase === 'running') {
     return (
       <div className="flex items-center gap-2.5 py-2 text-sm text-muted">
@@ -37,7 +46,10 @@ export function RunOutput({ phase, result, sample }: RunOutputProps) {
 
   if (phase === 'unavailable' || !result) {
     return (
-      <div className="flex items-start gap-3 rounded-card border border-verdict-ie/35 bg-verdict-ie/10 p-4">
+      <div
+        role="alert"
+        className="flex items-start gap-3 rounded-card border border-verdict-ie/35 bg-verdict-ie/10 p-4"
+      >
         <ServerCrash aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-verdict-ie" />
         <div className="space-y-1">
           <h3 className="text-[15px] font-semibold text-foreground">Judge unavailable</h3>

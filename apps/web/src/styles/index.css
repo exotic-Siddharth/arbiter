@@ -11,8 +11,10 @@
  * text-verdict-ac, bg-tier-blue/15, ...) registered in `@theme inline` below.
  * Light values live on :root, the dark "midnight" theme on .dark; dark is the default.
  *
- * The dark theme uses the spec hexes as given. The light theme darkens the semantic colours
- * (verdicts, difficulties, tiers, accent) so text meets WCAG AA on white.
+ * The dark theme uses the spec hexes where they pass. The light theme darkens the semantic colours
+ * (verdicts, difficulties, tiers, accent), and a few dark tints (WA, hard, blue tier) are
+ * lightened, so every badge text on its 12% tint, and the white text on primary buttons
+ * (#6a4af0 rests, #5b3bdc on hover), reaches WCAG AA 4.5:1; styles/tokens.test.ts measures it.
  */
 :root {
   color-scheme: light;
@@ -26,42 +28,42 @@
   --color-foreground: #11141b;
   --color-muted: #5b6475;
 
-  --color-primary: #7c5cff;
-  --color-primary-hover: #6a4af0;
+  --color-primary: #6a4af0;
+  --color-primary-hover: #5b3bdc;
   --color-on-primary: #ffffff;
   --color-primary-soft: rgb(124 92 255 / 0.1);
-  --color-primary-text: #6a4af0;
-  --color-accent: #0e7490;
+  --color-primary-text: #5b3bdc;
+  --color-accent: #155e75;
   --color-ring: #7c5cff;
 
-  --color-success: #15803d;
-  --color-warning: #b45309;
+  --color-success: #166534;
+  --color-warning: #92400e;
   --color-danger: #be123c;
   --color-info: #0369a1;
   --color-danger-solid: #e11d48;
   --color-danger-solid-hover: #be123c;
   --color-overlay: rgb(17 20 27 / 0.45);
 
-  --color-verdict-ac: #15803d;
+  --color-verdict-ac: #166534;
   --color-verdict-wa: #be123c;
-  --color-verdict-tle: #b45309;
-  --color-verdict-mle: #c2410c;
+  --color-verdict-tle: #92400e;
+  --color-verdict-mle: #9a3412;
   --color-verdict-re: #a21caf;
   --color-verdict-ce: #0369a1;
-  --color-verdict-ole: #a16207;
+  --color-verdict-ole: #854d0e;
   --color-verdict-ie: #475569;
   --color-verdict-pending: #52525b;
 
-  --color-difficulty-easy: #0f766e;
-  --color-difficulty-medium: #b45309;
+  --color-difficulty-easy: #115e59;
+  --color-difficulty-medium: #92400e;
   --color-difficulty-hard: #be123c;
 
   --color-tier-gray: #4b5563;
-  --color-tier-green: #15803d;
-  --color-tier-cyan: #0e7490;
+  --color-tier-green: #166534;
+  --color-tier-cyan: #155e75;
   --color-tier-blue: #1d4ed8;
   --color-tier-violet: #6d28d9;
-  --color-tier-amber: #b45309;
+  --color-tier-amber: #92400e;
 
   --navbar-height: 3.5rem;
 }
@@ -78,8 +80,8 @@
   --color-foreground: #e6e8ee;
   --color-muted: #9aa3b2;
 
-  --color-primary: #7c5cff;
-  --color-primary-hover: #6a4af0;
+  --color-primary: #6a4af0;
+  --color-primary-hover: #5b3bdc;
   --color-on-primary: #ffffff;
   --color-primary-soft: rgb(124 92 255 / 0.16);
   --color-primary-text: #a594ff;
@@ -95,7 +97,7 @@
   --color-overlay: rgb(3 4 7 / 0.72);
 
   --color-verdict-ac: #22c55e;
-  --color-verdict-wa: #f43f5e;
+  --color-verdict-wa: #fb7185;
   --color-verdict-tle: #f59e0b;
   --color-verdict-mle: #f97316;
   --color-verdict-re: #d946ef;
@@ -106,12 +108,12 @@
 
   --color-difficulty-easy: #14b8a6;
   --color-difficulty-medium: #f59e0b;
-  --color-difficulty-hard: #f43f5e;
+  --color-difficulty-hard: #fb7185;
 
   --color-tier-gray: #9ca3af;
   --color-tier-green: #22c55e;
   --color-tier-cyan: #22d3ee;
-  --color-tier-blue: #3b82f6;
+  --color-tier-blue: #60a5fa;
   --color-tier-violet: #a78bfa;
   --color-tier-amber: #f59e0b;
 }

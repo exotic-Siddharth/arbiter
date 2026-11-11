@@ -21,6 +21,7 @@ import {
   CPP_RENAMED_REFORMATTED,
   CPP_UNRELATED,
 } from '../plagiarism/samples.fixture';
+import { MAX_DETAIL_PAIRS } from '../plagiarism/admin';
 import { runPlagiarismReport } from '../plagiarism/service';
 
 vi.mock('../../judge/queue', async (importOriginal) => ({
@@ -215,5 +216,36 @@ describe('admin plagiarism routes', () => {
       .get('/api/admin/plagiarism/no-such-report')
       .set(authHeader(admin));
     expect(missing.status).toBe(404);
+  });
+
+  it('GET /:id caps the pairs at the top MAX_DETAIL_PAIRS by similarity; deleted pairs do not use up the cap', async () => {
+    const { contest, problem, a, b } = await contestWithCopies();
+    const report = await prisma.plagiarismReport.create({
+      data: { contestId: contest.id, status: 'DONE' },
+    });
+    const total = MAX_DETAIL_PAIRS + 5;
+    const pair = (similarity: number, submissionBId: string) => ({
+      reportId: report.id,
+      problemId: problem.id,
+      submissionAId: a.id,
+      submissionBId,
+      similarity,
+      matchedLinesA: [1],
+      matchedLinesB: [1],
+    });
+    await prisma.plagiarismPair.createMany({
+      data: [
+        pair(0.99, 'deleted-submission'),
+        ...Array.from({ length: total }, (_, i) => pair(0.5 + i / (total * 4), b.id)),
+      ],
+    });
+    const res = await request(app).get(`/api/admin/plagiarism/${report.id}`).set(authHeader(admin));
+    expect(res.status).toBe(200);
+    const detail = PlagiarismReportDetailSchema.parse(res.body);
+    expect(detail.pairCount).toBe(total + 1);
+    expect(detail.pairs).toHaveLength(MAX_DETAIL_PAIRS);
+    const scores = detail.pairs.map((p) => p.similarity);
+    expect(scores).toEqual([...scores].sort((x, y) => y - x));
+    expect(scores[0]).toBeCloseTo(0.5 + (total - 1) / (total * 4), 10);
   });
 });

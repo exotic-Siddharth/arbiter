@@ -1,7 +1,8 @@
 import type { AdminUser, Page, Role } from '@arbiter/shared';
 import { Prisma, type PrismaClient, type User } from '@prisma/client';
-import { conflict, notFound } from '../../lib/errors';
+import { conflict, forbidden, notFound } from '../../lib/errors';
 import { paginate, toPage } from '../../lib/pagination';
+import { clock } from '../../lib/time';
 
 const withCount = {
   _count: { select: { submissions: { where: { kind: 'NORMAL' as const } } } },
@@ -43,12 +44,17 @@ export async function listUsers(
   return toPage(users.map(toAdminUser), total, { page, pageSize });
 }
 
-/** Changes a role. The last remaining admin cannot be demoted (409), so nobody locks the site out. */
+/**
+ * Changes a role. You cannot change your own (403) and the last remaining admin cannot be demoted
+ * (409), so nobody locks the site out. A demoted user's refresh tokens are revoked.
+ */
 export async function setUserRole(
   prisma: PrismaClient,
+  callerId: string,
   id: string,
   role: Role,
 ): Promise<AdminUser> {
+  if (callerId === id) throw forbidden('You cannot change your own role');
   return prisma.$transaction(
     async (tx) => {
       const target = await tx.user.findUnique({ where: { id } });
@@ -58,6 +64,12 @@ export async function setUserRole(
         if (otherAdmins === 0) throw conflict('Cannot demote the last remaining admin');
       }
       const updated = await tx.user.update({ where: { id }, data: { role }, include: withCount });
+      if (target.role === 'ADMIN' && role !== 'ADMIN') {
+        await tx.refreshToken.updateMany({
+          where: { userId: id, revokedAt: null },
+          data: { revokedAt: clock.now() },
+        });
+      }
       return toAdminUser(updated);
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

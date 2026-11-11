@@ -8,6 +8,10 @@ export const LIMITS = {
   /** Custom run input, UTF-8 bytes. */
   runInputBytes: 65536,
   pageSizeMax: 100,
+  /** Highest ?page accepted: pageMax x pageSizeMax stays far below the int4 range of OFFSET. */
+  pageMax: 1_000_000,
+  /** Longest contest, days: keeps ICPC penalty minutes below the 10^7 score base. */
+  contestMaxDays: 30,
   pageSizeDefault: 20,
   bioMaxChars: 280,
   usernameMinChars: 3,

@@ -7,12 +7,25 @@ import { toIso, toIsoOrNull } from '../../lib/time';
  * Lane A3b uses toSubmissionSummary for GET /api/contests/:slug/submissions.
  */
 
-/** Prisma `include` that loads what toSubmissionSummary needs. */
-export const submissionSummaryInclude = {
+/**
+ * Prisma `select` that loads exactly what toSubmissionSummary reads (no sourceCode or
+ * compileOutput: lists must not materialise them).
+ */
+export const submissionSummarySelect = {
+  id: true,
+  language: true,
+  status: true,
+  verdict: true,
+  timeMs: true,
+  memoryKb: true,
+  testsPassed: true,
+  testsTotal: true,
+  createdAt: true,
+  judgedAt: true,
   problem: { select: { slug: true, title: true } },
   user: { select: { username: true } },
   contest: { select: { slug: true } },
-} satisfies Prisma.SubmissionInclude;
+} satisfies Prisma.SubmissionSelect;
 
 /** Prisma `include` that loads what toSubmissionDetail needs. */
 export const submissionDetailInclude = {
@@ -31,7 +44,7 @@ export const submissionDetailInclude = {
   results: { orderBy: { ordinal: 'asc' } },
 } satisfies Prisma.SubmissionInclude;
 
-/** The fields toSubmissionSummary reads. Any row loaded with submissionSummaryInclude fits. */
+/** The fields toSubmissionSummary reads. Any row loaded with submissionSummarySelect fits. */
 export type SubmissionSummaryRow = Pick<
   Submission,
   | 'id'

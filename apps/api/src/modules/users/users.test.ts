@@ -1,9 +1,9 @@
 import { ErrorBodySchema, MeResponseSchema, ProfileSchema } from '@arbiter/shared';
 import type { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../app';
-import { addDays } from '../../lib/time';
+import { addDays, clock } from '../../lib/time';
 import { resetTables, setupTestDatabase } from '../../../test/db';
 import {
   authHeader,
@@ -22,6 +22,10 @@ beforeAll(async () => {
   await resetTables(prisma);
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('PATCH /api/users/me', () => {
   it('sets the bio and returns Me', async () => {
     const user = await createUser(prisma);
@@ -34,6 +38,25 @@ describe('PATCH /api/users/me', () => {
     expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).bio).toBe(
       'Competitive programmer.',
     );
+  });
+
+  it('refuses to change the shared demo account profile: 403 and the bio stays', async () => {
+    await prisma.user.deleteMany({ where: { usernameLower: 'demo' } });
+    const demo = await createUser(prisma, {
+      username: 'demo',
+      email: 'demo@example.test',
+      bio: 'Try Arbiter',
+    });
+    const res = await request(app)
+      .patch('/api/users/me')
+      .set(authHeader(demo))
+      .send({ bio: 'defaced' });
+    expect(res.status).toBe(403);
+    expect(ErrorBodySchema.parse(res.body).error.code).toBe('FORBIDDEN');
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: demo.id } })).bio).toBe(
+      'Try Arbiter',
+    );
+    await prisma.user.delete({ where: { id: demo.id } });
   });
 
   it('accepts exactly 280 characters and rejects 281', async () => {
@@ -104,10 +127,17 @@ describe('GET /api/users/:username', () => {
     const medium = await createProblem(prisma, { difficulty: 'MEDIUM' });
     const hard = await createProblem(prisma, { difficulty: 'HARD' });
     const hidden = await createProblem(prisma, { difficulty: 'HARD', isPublished: false });
+    // Pinned mid-day UTC with explicit timestamps: a run crossing 00:00 UTC cannot split the day.
+    const today = new Date('2026-06-15T12:00:00.000Z');
+    vi.spyOn(clock, 'now').mockReturnValue(today);
     const done = (overrides: Parameters<typeof createSubmission>[1]) =>
-      createSubmission(prisma, { status: 'DONE', judgedAt: new Date(), ...overrides });
+      createSubmission(prisma, {
+        status: 'DONE',
+        createdAt: today,
+        judgedAt: today,
+        ...overrides,
+      });
 
-    const today = new Date();
     const lastYear = addDays(today, -400);
     // easy: WA then two AC (distinct solved counts once), medium: AC, hard: WA only.
     await done({ userId: user.id, problemId: easy.id, verdict: 'WA', language: 'CPP' });

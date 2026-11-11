@@ -13,8 +13,8 @@ import type { AuthUser } from '../../middleware/auth';
 import { conflict, forbidden, notFound } from '../../lib/errors';
 import { paginate, toPage } from '../../lib/pagination';
 import { clock, contestStatus, toIso } from '../../lib/time';
-import { problemDetailInclude, toProblemDetail } from '../problems/mappers';
-import { submissionSummaryInclude, toSubmissionSummary } from '../submissions/mappers';
+import { problemDetailInclude, problemDetailOmit, toProblemDetail } from '../problems/mappers';
+import { submissionSummarySelect, toSubmissionSummary } from '../submissions/mappers';
 
 /**
  * Public contest reads and registration (spec sections 9 and 10). Visibility: published
@@ -206,7 +206,7 @@ export async function getContestProblem(
   }
   const link = await prisma.contestProblem.findUnique({
     where: { contestId_label: { contestId: contest.id, label: label.toUpperCase() } },
-    include: { problem: { include: problemDetailInclude } },
+    include: { problem: { include: problemDetailInclude, omit: problemDetailOmit } },
   });
   if (!link) throw notFound('Problem not found in this contest');
 
@@ -255,7 +255,7 @@ export async function listContestSubmissions(
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip,
       take,
-      include: submissionSummaryInclude,
+      select: submissionSummarySelect,
     }),
     prisma.submission.count({ where }),
   ]);

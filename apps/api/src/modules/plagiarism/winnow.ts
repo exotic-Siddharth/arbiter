@@ -251,17 +251,23 @@ export function fingerprints(
   ).map((position) => grams[position]);
 }
 
-const hashSet = (prints: readonly Fingerprint[]) => new Set(prints.map((p) => p.hash));
+/** The distinct hashes of a fingerprint list; build once per submission and reuse across pairs. */
+export const hashSet = (prints: readonly Fingerprint[]): Set<bigint> =>
+  new Set(prints.map((p) => p.hash));
+
+/** |A ∩ B| / min(|A|, |B|) over two hash sets; 0 when either side is empty. */
+export function overlap(a: ReadonlySet<bigint>, b: ReadonlySet<bigint>): number {
+  const smaller = Math.min(a.size, b.size);
+  if (smaller === 0) return 0;
+  const [small, large] = a.size <= b.size ? [a, b] : [b, a];
+  let shared = 0;
+  for (const hash of small) if (large.has(hash)) shared += 1;
+  return shared / smaller;
+}
 
 /** |FA ∩ FB| / min(|FA|, |FB|) over distinct hashes; 0 when either side is empty. */
 export function similarity(fa: readonly Fingerprint[], fb: readonly Fingerprint[]): number {
-  const a = hashSet(fa);
-  const b = hashSet(fb);
-  const smaller = Math.min(a.size, b.size);
-  if (smaller === 0) return 0;
-  let shared = 0;
-  for (const hash of a) if (b.has(hash)) shared += 1;
-  return shared / smaller;
+  return overlap(hashSet(fa), hashSet(fb));
 }
 
 const coveredLines = (prints: readonly Fingerprint[], other: ReadonlySet<bigint>) =>

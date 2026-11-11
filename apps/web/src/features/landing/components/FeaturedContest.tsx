@@ -1,5 +1,4 @@
-import { ContestListSchema, type ContestSummary } from '@arbiter/shared';
-import { useQuery } from '@tanstack/react-query';
+import type { ContestSummary } from '@arbiter/shared';
 import { ArrowRight, CalendarClock, Swords } from 'lucide-react';
 import { Link } from 'react-router';
 import { Countdown } from '@/components/Countdown';
@@ -8,30 +7,21 @@ import { ButtonLink } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { EmptyState, ErrorState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { api } from '@/lib/api';
 import { formatDateTime, pluralize } from '@/lib/format';
-import { qk } from '@/lib/queryKeys';
+import { useContestList } from '@/features/contests/hooks/useContestList';
 
 function useFeaturedContest() {
-  const running = useQuery({
-    queryKey: qk.contests.list('running'),
-    queryFn: ({ signal }) =>
-      api.get('/contests', { query: { status: 'running' }, schema: ContestListSchema, signal }),
-  });
-  const runningContest = running.data?.[0];
+  const running = useContestList('running');
+  const runningContest = running.data?.contests[0];
   const needUpcoming = running.isSuccess && runningContest === undefined;
-  const upcoming = useQuery({
-    queryKey: qk.contests.list('upcoming'),
-    queryFn: ({ signal }) =>
-      api.get('/contests', { query: { status: 'upcoming' }, schema: ContestListSchema, signal }),
-    enabled: needUpcoming,
-  });
-  const next = upcoming.data
-    ?.slice()
+  const upcoming = useContestList('upcoming', { enabled: needUpcoming });
+  const next = upcoming.data?.contests
+    .slice()
     .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))[0];
 
   return {
     contest: runningContest ?? next,
+    offsetMs: (runningContest ? running.data : upcoming.data)?.offsetMs ?? 0,
     isPending: running.isPending || (needUpcoming && upcoming.isPending),
     error: running.error ?? upcoming.error,
     isError: running.isError || (needUpcoming && upcoming.isError),
@@ -40,7 +30,7 @@ function useFeaturedContest() {
   };
 }
 
-function ContestBody({ contest }: { contest: ContestSummary }) {
+function ContestBody({ contest, offsetMs }: { contest: ContestSummary; offsetMs: number }) {
   const live = contest.status === 'RUNNING';
   return (
     <div className="space-y-4 p-5 pt-3">
@@ -68,6 +58,7 @@ function ContestBody({ contest }: { contest: ContestSummary }) {
         </p>
         <Countdown
           to={live ? contest.endsAt : contest.startsAt}
+          serverOffsetMs={offsetMs}
           label={live ? 'until the contest ends' : 'until the contest starts'}
           className="font-mono text-2xl font-semibold tracking-tight text-foreground tabular-nums"
         />
@@ -118,7 +109,7 @@ export function FeaturedContest() {
           onRetry={() => void featured.refetch()}
         />
       ) : featured.contest ? (
-        <ContestBody contest={featured.contest} />
+        <ContestBody contest={featured.contest} offsetMs={featured.offsetMs} />
       ) : (
         <EmptyState
           compact

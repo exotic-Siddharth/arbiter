@@ -2,6 +2,8 @@ import { ErrorBodySchema, ReadinessSchema } from '@arbiter/shared';
 import { Redis } from 'ioredis';
 import request from 'supertest';
 import { afterAll, describe, expect, it } from 'vitest';
+import { setupTestDatabase } from '../test/db';
+import { authHeader, createUser } from '../test/factories';
 import { createApp } from './app';
 import { signAccessToken } from './lib/jwt';
 import { routeManifest } from './lib/router';
@@ -67,7 +69,6 @@ const EXTRA_ROUTES = ['POST /api/auth/demo', 'GET /api/admin/problems/:id/tests/
 const app = createApp();
 
 const userToken = signAccessToken({ id: 'user-1', username: 'alice', role: 'USER' });
-const adminToken = signAccessToken({ id: 'admin-1', username: 'root', role: 'ADMIN' });
 
 describe('createApp', () => {
   it('GET /healthz → 200 {ok:true}', async () => {
@@ -142,14 +143,49 @@ describe('createApp', () => {
   });
 
   it('admin test-case routes skip the 1 MB parser (they allow 20 MB)', async () => {
+    // Admin routes re-read the caller's role from the database, so the admin must exist.
+    const admin = await createUser(await setupTestDatabase(), { role: 'ADMIN' });
     const big = 'y'.repeat(2_000_000);
     const res = await request(app)
       .post('/api/admin/problems/some-problem-id/tests/bulk')
-      .set('Authorization', `Bearer ${adminToken}`)
+      .set(authHeader(admin))
       .set('Content-Type', 'application/json')
       .send(JSON.stringify({ tests: [{ input: big, expectedOutput: '1\n' }], replace: false }));
     expect(res.status).not.toBe(413);
     expect(res.status).not.toBe(400);
+  });
+
+  it('a JSON body over 20 MB → 413 PAYLOAD_TOO_LARGE on the bulk and single test routes', async () => {
+    const admin = await createUser(await setupTestDatabase(), { role: 'ADMIN' });
+    const huge = 'y'.repeat(21_000_000);
+    const payloads = [
+      ['/api/admin/problems/some-problem-id/tests/bulk', { tests: [{ input: huge }] }],
+      ['/api/admin/problems/some-problem-id/tests', { input: huge, expectedOutput: '1\n' }],
+    ] as const;
+    for (const [path, payload] of payloads) {
+      const res = await request(app)
+        .post(path)
+        .set(authHeader(admin))
+        .set('Content-Type', 'application/json')
+        .send(JSON.stringify(payload));
+      expect(res.status, path).toBe(413);
+      expect(ErrorBodySchema.parse(res.body).error.code).toBe('PAYLOAD_TOO_LARGE');
+    }
+  });
+
+  it('every admin route in routeManifest is 401 for a guest and 403 for a USER', async () => {
+    const user = await createUser(await setupTestDatabase());
+    const adminRoutes = routeManifest.filter((r) => r.auth === 'admin');
+    expect(adminRoutes.length).toBeGreaterThan(15);
+    for (const { method, fullPath } of adminRoutes) {
+      const path = fullPath.replace(/:[A-Za-z0-9_]+/g, 'x');
+      const label = `${method.toUpperCase()} ${fullPath}`;
+      const guest = await request(app)[method](path);
+      expect(guest.status, label).toBe(401);
+      const asUser = await request(app)[method](path).set(authHeader(user));
+      expect(asUser.status, label).toBe(403);
+      expect(ErrorBodySchema.parse(asUser.body).error.code).toBe('FORBIDDEN');
+    }
   });
 
   it('GET /readyz → 200 when Postgres and Redis are up', async () => {

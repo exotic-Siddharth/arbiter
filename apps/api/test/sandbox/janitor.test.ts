@@ -76,7 +76,7 @@ describe('removeStaleSandboxes', () => {
       expect(names).toContain(`arbiter-sbx-other-${suffix}`);
       expect(names).not.toContain(`arbiter-sbx-dead-${suffix}`);
 
-      // Past the longest container lifetime (15 min) even a live worker's container is stale.
+      // Past the longest session (ready timeout + 15 min + slack) even a live worker's container is stale.
       // A day ahead, not 16 min: Docker Desktop's VM clock (container Created) was measured
       // 80 s ahead of the host clock, and it drifts.
       const later = await removeStaleSandboxes({ now: Date.now() + 24 * 60 * 60_000 });

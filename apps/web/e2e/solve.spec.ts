@@ -1,12 +1,25 @@
 import { expect, test } from '@playwright/test';
-import { pickLanguage, registerViaUi, seedSolution, setEditorCode } from './support/helpers';
+import {
+  pickLanguage,
+  registerViaUi,
+  seedSolution,
+  setEditorCode,
+  trackForeignRequests,
+  trackSocketEvents,
+} from './support/helpers';
 
 const SLUG = 'rainfall-ledger';
 
 test.describe('solving a problem', () => {
   test('register, open a problem, submit the C++ reference, watch it be judged and see Accepted', async ({
     page,
+    baseURL,
   }) => {
+    // The workspace mounts Monaco and renders a statement with math (KaTeX): nothing may
+    // come from another origin (R18, no CDN).
+    const foreign = trackForeignRequests(page, new URL(baseURL!).origin);
+    // The UI also polls every 8 s, so only the socket frames prove live streaming.
+    const socketEvents = trackSocketEvents(page);
     await registerViaUi(page);
     await page.goto('/problems');
     await page.getByRole('link', { name: 'Rainfall Ledger' }).click();
@@ -26,12 +39,16 @@ test.describe('solving a problem', () => {
     await expect(result.getByText(/\d+ \/ \d+ tests passed/)).toBeVisible();
     await expect(result.getByText('Time')).toBeVisible();
     await expect(result.getByText('Memory')).toBeVisible();
+    await expect
+      .poll(() => socketEvents, { message: 'live events received over the socket' })
+      .toEqual(expect.arrayContaining(['submission:test', 'submission:done']));
 
     // The submission shows up in "My submissions" and on its own page.
     await result.getByRole('link', { name: /view submission details/i }).click();
     await expect(page).toHaveURL(/\/submissions\/[a-z0-9]+$/);
     await expect(page.getByText('Accepted').first()).toBeVisible();
     await expect(page.getByRole('table', { name: /test results/i })).toBeVisible();
+    expect(foreign, 'requests to other origins').toEqual([]);
   });
 
   test('a wrong answer shows Wrong Answer and the failed-sample diff', async ({ page }) => {

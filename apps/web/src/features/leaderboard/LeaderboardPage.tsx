@@ -11,6 +11,7 @@ import { TableSkeleton } from '@/components/ui/Table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { api } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
+import { useClampPage } from '@/lib/useClampPage';
 import { useCurrentUser } from '@/stores/auth';
 import { LeaderboardTable } from './components/LeaderboardTable';
 
@@ -53,6 +54,10 @@ export function Component() {
     );
   };
 
+  useClampPage(query.data, query.isPlaceholderData, (last) =>
+    update({ page: last === 1 ? null : String(last) }),
+  );
+
   return (
     <Page title="Leaderboard" description={DESCRIPTIONS[by]}>
       <Tabs
@@ -70,7 +75,7 @@ export function Component() {
             <QueryState
               query={query}
               loading={<TableSkeleton rows={10} columns={4} />}
-              isEmpty={(data) => data.items.length === 0}
+              isEmpty={(data) => data.items.length === 0 && data.total === 0}
               empty={
                 <EmptyState
                   icon={<Trophy />}

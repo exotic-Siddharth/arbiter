@@ -18,10 +18,16 @@ export function toMe(user: User): Me {
 
 const DUPLICATE_MESSAGE = 'That email or username is already taken';
 
+/** Names only the seed may create: `demo` is the target of passwordless demo login. */
+const RESERVED_USERNAMES = new Set(['demo', 'admin']);
+
 /** Creates the account. Email is stored lower-case; usernames are unique case-insensitively. */
 export async function registerUser(prisma: PrismaClient, body: RegisterBody): Promise<User> {
   const email = body.email.toLowerCase();
   const usernameLower = body.username.toLowerCase();
+  if (RESERVED_USERNAMES.has(usernameLower)) {
+    throw conflict('That username is reserved', { field: 'username' });
+  }
 
   const existing = await prisma.user.findFirst({
     where: { OR: [{ email }, { usernameLower }] },
