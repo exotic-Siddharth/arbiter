@@ -64,6 +64,16 @@ describe('GET /api/leaderboard by rating', () => {
     expect(ErrorBodySchema.parse(bad.body).error.code).toBe('VALIDATION_ERROR');
     expect((await request(app).get('/api/leaderboard').query({ pageSize: 101 })).status).toBe(400);
   });
+
+  it('answers 400, not 500, to an absurd ?page on the public list endpoints (A-25)', async () => {
+    for (const path of ['/api/leaderboard', '/api/problems', '/api/submissions']) {
+      for (const page of ['1e21', '1e300', '99999999999']) {
+        const res = await request(app).get(path).query({ page, pageSize: 100 });
+        expect(res.status, `${path}?page=${page}`).toBe(400);
+        expect(ErrorBodySchema.parse(res.body).error.code).toBe('VALIDATION_ERROR');
+      }
+    }
+  });
 });
 
 describe('GET /api/leaderboard by solved', () => {

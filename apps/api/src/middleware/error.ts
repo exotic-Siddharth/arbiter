@@ -20,6 +20,22 @@ function isBodyParserError(error: unknown): error is BodyParserError {
   );
 }
 
+/**
+ * Postgres 22021 (invalid byte sequence for UTF8: 0x00): text columns cannot hold U+0000, so the
+ * request carried a NUL. Prisma surfaces it as a known, unknown or raw-query error depending on
+ * the call, hence the check on the Postgres code in the message and meta.
+ */
+function isNulByteError(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) &&
+    !(error instanceof Prisma.PrismaClientUnknownRequestError)
+  ) {
+    return false;
+  }
+  const meta = JSON.stringify((error as { meta?: unknown }).meta ?? {});
+  return /22021|invalid byte sequence for encoding "UTF8": 0x00/.test(`${error.message} ${meta}`);
+}
+
 /** Maps anything thrown by a handler to an AppError. */
 export function toAppError(error: unknown): AppError {
   if (error instanceof AppError) return error;
@@ -35,6 +51,7 @@ export function toAppError(error: unknown): AppError {
       return badRequest('Unreadable request body');
     }
   }
+  if (isNulByteError(error)) return badRequest('Text must not contain NUL characters');
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     // Unique constraint violation and "record to update/delete not found".
     if (error.code === 'P2002') {

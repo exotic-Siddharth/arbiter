@@ -10,8 +10,17 @@ import type { PrismaClient, User } from '@prisma/client';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { resetTables, setupTestDatabase } from '../../../test/db';
-import { authHeader, createProblem, createUser, uniqueSuffix } from '../../../test/factories';
+import {
+  authHeader,
+  createContest,
+  createProblem,
+  createSubmission,
+  createUser,
+  uniqueSuffix,
+} from '../../../test/factories';
 import { createApp } from '../../app';
+import { getRedis } from '../../lib/redis';
+import { rebuildScoreboard, scoreboardKeys } from '../contests/scoreboard';
 
 let prisma: PrismaClient;
 const app = createApp({ rateLimits: false });
@@ -51,23 +60,29 @@ describe('admin problems RBAC', () => {
   it('USER gets 403 and a guest 401 on every admin problem route', async () => {
     const problem = await createProblem(prisma);
     const test = problem.testCases[0]!;
-    const calls = [
+    const makeCalls = () => [
       request(app).get('/api/admin/problems'),
       request(app).post('/api/admin/problems').send(body()),
       request(app).get(`/api/admin/problems/${problem.id}`),
       request(app).put(`/api/admin/problems/${problem.id}`).send(body()),
       request(app).delete(`/api/admin/problems/${problem.id}`),
       request(app).get(`/api/admin/problems/${problem.id}/tests`),
+      request(app)
+        .post(`/api/admin/problems/${problem.id}/tests`)
+        .send({ input: '1\n', expectedOutput: '1\n' }),
       request(app).post(`/api/admin/problems/${problem.id}/tests/bulk`).send({ tests: [] }),
       request(app).get(`/api/admin/problems/${problem.id}/tests/${test.id}`),
+      request(app)
+        .put(`/api/admin/problems/${problem.id}/tests/${test.id}`)
+        .send({ input: '1\n', expectedOutput: '1\n' }),
       request(app).delete(`/api/admin/problems/${problem.id}/tests/${test.id}`),
     ];
-    for (const call of calls) {
+    for (const call of makeCalls()) {
       const res = await call.set(authHeader(user));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('FORBIDDEN');
     }
-    expect((await request(app).get('/api/admin/problems')).status).toBe(401);
+    for (const call of makeCalls()) expect((await call).status).toBe(401);
     expect(await prisma.problem.count({ where: { id: problem.id } })).toBe(1);
   });
 });
@@ -168,6 +183,11 @@ describe('admin problem CRUD', () => {
       referenceLanguage: 'CPP',
       referenceSolution: 'int main(){}',
     });
+    await request(app)
+      .post(`/api/admin/problems/${created.id}/tests`)
+      .set(asAdmin())
+      .send({ input: '1 2\n', expectedOutput: '3\n' })
+      .expect(201);
     const put = await request(app)
       .put(`/api/admin/problems/${created.id}`)
       .set(asAdmin())
@@ -206,6 +226,46 @@ describe('admin problem CRUD', () => {
     });
   });
 
+  it('refuses to publish a problem without tests, on create and on PUT (409)', async () => {
+    const created = await request(app)
+      .post('/api/admin/problems')
+      .set(asAdmin())
+      .send(body({ isPublished: true }));
+    expect(created.status).toBe(409);
+    expect(created.body.error.code).toBe('CONFLICT');
+
+    const draft = await createViaApi();
+    const put = await request(app)
+      .put(`/api/admin/problems/${draft.id}`)
+      .set(asAdmin())
+      .send(body({ slug: draft.slug, isPublished: true }));
+    expect(put.status).toBe(409);
+    expect((await prisma.problem.findUniqueOrThrow({ where: { id: draft.id } })).isPublished).toBe(
+      false,
+    );
+  });
+
+  it('refuses to delete the last test of a published problem (409) but allows it on a draft', async () => {
+    const published = await createProblem(prisma, {
+      tests: [{ input: '1\n', expectedOutput: '1\n' }],
+    });
+    const only = published.testCases[0]!;
+    const res = await request(app)
+      .delete(`/api/admin/problems/${published.id}/tests/${only.id}`)
+      .set(asAdmin());
+    expect(res.status).toBe(409);
+    expect(await prisma.testCase.count({ where: { problemId: published.id } })).toBe(1);
+
+    const draft = await createProblem(prisma, {
+      isPublished: false,
+      tests: [{ input: '1\n', expectedOutput: '1\n' }],
+    });
+    await request(app)
+      .delete(`/api/admin/problems/${draft.id}/tests/${draft.testCases[0]!.id}`)
+      .set(asAdmin())
+      .expect(204);
+  });
+
   it('PUT answers 404 for an unknown id and 409 for a slug taken by another problem', async () => {
     const a = await createViaApi();
     const b = await createViaApi();
@@ -229,6 +289,28 @@ describe('admin problem CRUD', () => {
     expect(await prisma.testCase.count({ where: { problemId: problem.id } })).toBe(0);
     const again = await request(app).delete(`/api/admin/problems/${problem.id}`).set(asAdmin());
     expect(again.status).toBe(404);
+  });
+
+  it('DELETE drops the cached scoreboard of every contest that used the problem', async () => {
+    const problem = await createProblem(prisma);
+    const player = await createUser(prisma);
+    const contest = await createContest(prisma, {
+      problems: [{ problemId: problem.id, label: 'A' }],
+      registrations: [player.id],
+    });
+    await createSubmission(prisma, {
+      userId: player.id,
+      problemId: problem.id,
+      contestId: contest.id,
+      status: 'DONE',
+      verdict: 'AC',
+    });
+    await rebuildScoreboard(contest.id);
+    const keys = scoreboardKeys(contest.id);
+    expect(await getRedis().exists(keys.rank)).toBe(1);
+    const res = await request(app).delete(`/api/admin/problems/${problem.id}`).set(asAdmin());
+    expect(res.status).toBe(204);
+    expect(await getRedis().exists(keys.rank, keys.rows)).toBe(0);
   });
 });
 

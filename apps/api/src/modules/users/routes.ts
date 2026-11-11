@@ -1,7 +1,7 @@
 import { MeResponseSchema, PatchMeBody, ProfileSchema, UsernameParams } from '@arbiter/shared';
 import { Prisma } from '@prisma/client';
 import { getDeps } from '../../lib/deps';
-import { unauthorized } from '../../lib/errors';
+import { forbidden, unauthorized } from '../../lib/errors';
 import { createRouter } from '../../lib/router';
 import { toMe } from '../auth/service';
 import { getProfile } from './profile.service';
@@ -17,9 +17,13 @@ route(
     tags: ['Users'],
     auth: 'user',
     request: { body: PatchMeBody },
-    responses: { 200: MeResponseSchema },
+    responses: { 200: MeResponseSchema, 403: 'The shared demo account cannot be edited' },
   },
   async (req, res) => {
+    // The demo account is shared by every visitor: its public profile must stay as seeded.
+    if (req.user!.username.toLowerCase() === 'demo') {
+      throw forbidden('The shared demo account cannot be edited');
+    }
     const bio = req.body.bio === null || req.body.bio === '' ? null : req.body.bio;
     try {
       const user = await getDeps(req).prisma.user.update({

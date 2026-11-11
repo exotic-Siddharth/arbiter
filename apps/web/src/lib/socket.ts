@@ -64,8 +64,15 @@ function createSocket(): ArbiterSocket {
         if (!client.connected) client.connect();
       });
   };
+  // The server closes a socket when its access token expires (or for flooding); socket.io does
+  // not reconnect after a server-initiated disconnect. The auth callback supplies the newest
+  // token, and a stale one lands in onConnectError (refresh, then reconnect).
+  const onDisconnect = (reason: string) => {
+    if (reason === 'io server disconnect') client.connect();
+  };
   client.on('connect', onConnect);
   client.on('connect_error', onConnectError);
+  client.on('disconnect', onDisconnect);
 
   const unsubscribeAuth = useAuth.subscribe((state, previous) => {
     if (state.accessToken === previous.accessToken) return;
@@ -100,6 +107,7 @@ function createSocket(): ArbiterSocket {
     unsubscribeAuth();
     client.off('connect', onConnect);
     client.off('connect_error', onConnectError);
+    client.off('disconnect', onDisconnect);
     client.off('connect', relay);
     client.off('disconnect', relay);
     client.off('connect_error', relay);

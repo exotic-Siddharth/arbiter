@@ -7,7 +7,10 @@ import {
   LANGUAGES,
   LANGUAGE_IDS,
   LIMITS,
+  AdminContestBody,
   ListProblemsQuery,
+  PageQuery,
+  ScoreboardQuery,
   RATING_TIERS,
   RegisterBody,
   ScoreboardSchema,
@@ -217,5 +220,28 @@ describe('shared contracts', () => {
     expect(ErrorBodySchema.safeParse({ error: { code: 'NOPE', message: 'x' } }).success).toBe(
       false,
     );
+  });
+
+  it('bounds ?page so skip stays inside a safe integer range (A-25)', () => {
+    expect(PageQuery.parse({ page: String(LIMITS.pageMax) }).page).toBe(LIMITS.pageMax);
+    for (const page of ['1e21', '1e300', '99999999999', String(LIMITS.pageMax + 1), 'Infinity']) {
+      expect(PageQuery.safeParse({ page }).success, page).toBe(false);
+      expect(ScoreboardQuery.safeParse({ page }).success, page).toBe(false);
+    }
+    expect(LIMITS.pageMax * LIMITS.pageSizeMax).toBeLessThan(2 ** 31);
+  });
+
+  it('bounds the contest duration so solved x 10^7 - penalty orders correctly (A-50)', () => {
+    const body = {
+      slug: 'long-contest',
+      title: 'Long',
+      startsAt: '2026-01-01T00:00:00.000Z',
+      endsAt: '2026-01-31T00:00:00.000Z',
+    };
+    expect(AdminContestBody.safeParse(body).success).toBe(true);
+    const tooLong = { ...body, endsAt: '2027-01-01T00:00:00.000Z' };
+    const result = AdminContestBody.safeParse(tooLong);
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error?.issues)).toContain('endsAt');
   });
 });

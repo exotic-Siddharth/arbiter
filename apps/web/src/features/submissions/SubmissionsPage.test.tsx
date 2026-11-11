@@ -123,4 +123,25 @@ describe('SubmissionsPage', { timeout: 20_000 }, () => {
     await screen.findByRole('link', { name: 'Signal Towers' });
     expect(screen.queryByRole('tab', { name: 'Mine' })).not.toBeInTheDocument();
   });
+
+  it('moves to the last page when ?page is past the end', async () => {
+    const api = mockFetch({
+      'GET /api/submissions': ({ query }) => {
+        const requested = Number(query.get('page') ?? 1);
+        return jsonResponse(
+          200,
+          submissionPage(requested > 2 ? [] : [judgedOther], {
+            total: 30,
+            page: requested,
+            pageSize: 20,
+          }),
+        );
+      },
+    });
+    const { router } = renderWithProviders(<SubmissionsPage />, { route: '/submissions?page=99' });
+    await screen.findByText('Signal Towers');
+    expect(new URLSearchParams(router.state.location.search).get('page')).toBe('2');
+    expect(api.requests.at(-1)?.query.get('page')).toBe('2');
+    expect(screen.queryByText(/no submissions yet/i)).not.toBeInTheDocument();
+  });
 });

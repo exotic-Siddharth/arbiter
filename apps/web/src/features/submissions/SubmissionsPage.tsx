@@ -15,6 +15,7 @@ import {
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { qk } from '@/lib/queryKeys';
+import { useClampPage } from '@/lib/useClampPage';
 import { useSocketStatus } from '@/lib/socket';
 import { useCurrentUser } from '@/stores/auth';
 import { useUrlFilters } from '@/features/problems/hooks/useUrlFilters';
@@ -58,6 +59,11 @@ export function Component() {
         : false,
   });
 
+  const { set } = filters;
+  useClampPage(submissions.data, submissions.isPlaceholderData, (last) =>
+    set({ page: last }, { replace: true }),
+  );
+
   const live = useLiveSubmissionRows(listKey, submissions.data?.items);
   const hasPending = submissions.data?.items.some((item) => isPendingStatus(item.status)) ?? false;
 
@@ -79,7 +85,7 @@ export function Component() {
         <QueryState
           query={submissions}
           loading={<TableSkeleton rows={8} columns={6} />}
-          isEmpty={(data) => data.items.length === 0}
+          isEmpty={(data) => data.items.length === 0 && data.total === 0}
           empty={
             <EmptyState
               icon={<Inbox />}

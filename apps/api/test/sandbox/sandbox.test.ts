@@ -156,6 +156,79 @@ describe('attacks (spec 8.7)', () => {
     expect(await waitForNoContainers()).toEqual([]);
   });
 
+  // A-05: the harness measures the whole process tree, not only the direct child. The forking
+  // programs wait for their child with WNOWAIT (it stays a zombie, never reaped by the parent),
+  // so wait4() on the direct child alone would not see the child's resources.
+  it('memory of an unreaped child process counts: a forking allocator gets MLE', async () => {
+    const source = [
+      'import os',
+      'pid = os.fork()',
+      'if pid == 0:',
+      '    b = bytearray(200 * 1024 * 1024)',
+      '    for i in range(0, len(b), 4096):',
+      '        b[i] = 1',
+      '    print(3)',
+      '    os._exit(0)',
+      'os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT)',
+      'os._exit(0)',
+      '',
+    ].join('\n');
+    const run = await runInSandbox('PYTHON', source, { memoryLimitMb: 64, inputs: [SUM_INPUT] });
+    const raw = run.results[0]!;
+    expect(raw.maxRssKb).toBeGreaterThan(150 * 1024);
+    expect(raw.status).toBe('MLE');
+    expect(toVerdict(raw, true)).toBe('MLE');
+  });
+
+  it('memory of a child still running when the parent exits counts too', async () => {
+    const source = [
+      'import os, time',
+      'if os.fork() == 0:',
+      '    b = bytearray(200 * 1024 * 1024)',
+      '    for i in range(0, len(b), 4096):',
+      '        b[i] = 1',
+      '    time.sleep(60)',
+      '    os._exit(0)',
+      'time.sleep(2)',
+      'os._exit(0)',
+      '',
+    ].join('\n');
+    const run = await runInSandbox('PYTHON', source, { memoryLimitMb: 64, inputs: [SUM_INPUT] });
+    expect(run.results[0]!.status).toBe('MLE');
+  });
+
+  it('cpu time of an unreaped child process counts: a forking spinner gets TLE', async () => {
+    const source = [
+      'import os, time',
+      'pid = os.fork()',
+      'if pid == 0:',
+      '    while time.process_time() < 1.5:',
+      '        pass',
+      '    os._exit(0)',
+      'os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT)',
+      'os._exit(0)',
+      '',
+    ].join('\n');
+    const run = await runInSandbox('PYTHON', source, { timeLimitMs: 300, inputs: [SUM_INPUT] });
+    const raw = run.results[0]!;
+    expect(raw.cpuMs).toBeGreaterThan(900);
+    expect(raw.status).toBe('TLE');
+  });
+
+  it('a harmless child that the parent waits for is still AC', async () => {
+    const source = [
+      'import os',
+      'pid = os.fork()',
+      'if pid == 0:',
+      '    os._exit(0)',
+      'os.waitpid(pid, 0)',
+      'a, b = map(int, input().split())',
+      'print(a + b)',
+      '',
+    ].join('\n');
+    expect(await verdictOf('PYTHON', source)).toBe('AC');
+  });
+
   it('sleep 100: TLE via the wall limit', async () => {
     const run = await runInSandbox('PYTHON', 'import time\ntime.sleep(100)\n', {
       timeLimitMs: 500,

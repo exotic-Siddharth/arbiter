@@ -12,12 +12,14 @@ export interface ContestCardProps {
   contest: ContestSummary;
   /** Client time the list was evaluated at (Date.now() at fetch). */
   now: number;
+  /** Server clock minus client clock in ms (the list carries no serverTime). */
+  serverOffsetMs?: number;
   onBoundary?: () => void;
 }
 
 /** One contest in the /contests list: status, schedule, countdown, participants, register. */
-export function ContestCard({ contest, now, onBoundary }: ContestCardProps) {
-  const boundary = contestBoundary(contest, now);
+export function ContestCard({ contest, now, serverOffsetMs = 0, onBoundary }: ContestCardProps) {
+  const boundary = contestBoundary(contest, now + serverOffsetMs);
   const href = `/contests/${encodeURIComponent(contest.slug)}`;
   return (
     <Card className="flex flex-col gap-4 p-5 transition-colors hover:border-border-strong sm:flex-row sm:items-center">
@@ -72,6 +74,7 @@ export function ContestCard({ contest, now, onBoundary }: ContestCardProps) {
             <div className="text-xs text-muted">{boundary.label}</div>
             <Countdown
               to={boundary.target}
+              serverOffsetMs={serverOffsetMs}
               label={boundary.spoken}
               onComplete={onBoundary}
               className="text-lg font-semibold text-foreground"

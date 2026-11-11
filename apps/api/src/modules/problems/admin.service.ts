@@ -11,9 +11,10 @@ import {
   type BulkTestsResponse,
 } from '@arbiter/shared';
 import type { Prisma, PrismaClient, Problem, TestCase } from '@prisma/client';
-import { notFound } from '../../lib/errors';
+import { conflict, notFound } from '../../lib/errors';
 import { paginate, toPage } from '../../lib/pagination';
 import { toIso } from '../../lib/time';
+import { invalidateScoreboard } from '../contests/scoreboard';
 
 /** Admin problem and test-case content (/api/admin/problems). Owner: lane A3a. */
 
@@ -162,12 +163,15 @@ export async function getAdminProblem(prisma: PrismaClient, id: string): Promise
   return toAdminProblem(row);
 }
 
-/** POST: a duplicate slug is a Prisma P2002, which the error middleware maps to 409. */
+const NO_TESTS_TO_PUBLISH = 'A problem needs at least one test case before it can be published';
+
+/** POST: a duplicate slug is a Prisma P2002, which the error middleware maps to 409. A new problem has no tests, so it cannot be created published (409). */
 export async function createAdminProblem(
   prisma: PrismaClient,
   body: AdminProblemBody,
   authorId: string,
 ): Promise<AdminProblem> {
+  if (body.isPublished) throw conflict(NO_TESTS_TO_PUBLISH);
   const row = await prisma.problem.create({
     data: {
       ...problemFields(body),
@@ -181,13 +185,16 @@ export async function createAdminProblem(
   return toAdminProblem(row);
 }
 
-/** PUT: full replace, tags included (the nested write runs in one transaction). */
+/** PUT: full replace, tags included (the nested write runs in one transaction). Publishing needs at least one test (409). */
 export async function updateAdminProblem(
   prisma: PrismaClient,
   id: string,
   body: AdminProblemBody,
 ): Promise<AdminProblem> {
   await assertProblem(prisma, id);
+  if (body.isPublished && (await prisma.testCase.count({ where: { problemId: id } })) === 0) {
+    throw conflict(NO_TESTS_TO_PUBLISH);
+  }
   const row = await prisma.problem.update({
     where: { id },
     data: { ...problemFields(body), tags: { deleteMany: {}, create: tagCreates(body.tags) } },
@@ -196,10 +203,15 @@ export async function updateAdminProblem(
   return toAdminProblem(row);
 }
 
-/** DELETE: test cases, submissions and contest links cascade. */
+/** DELETE: test cases, submissions and contest links cascade; the boards of those contests are dropped. */
 export async function deleteAdminProblem(prisma: PrismaClient, id: string): Promise<void> {
+  const links = await prisma.contestProblem.findMany({
+    where: { problemId: id },
+    select: { contestId: true },
+  });
   const { count } = await prisma.problem.deleteMany({ where: { id } });
   if (count === 0) throw notFound('Problem not found');
+  await Promise.all(links.map((link) => invalidateScoreboard(link.contestId)));
 }
 
 interface TestSummaryRow {
@@ -312,8 +324,18 @@ export async function deleteAdminTest(
   problemId: string,
   testId: string,
 ): Promise<void> {
-  const { count } = await prisma.testCase.deleteMany({ where: { id: testId, problemId } });
-  if (count === 0) throw notFound('Test case not found');
+  await prisma.$transaction(async (tx) => {
+    const problem = await tx.problem.findUnique({
+      where: { id: problemId },
+      select: { isPublished: true },
+    });
+    if (problem?.isPublished && (await tx.testCase.count({ where: { problemId } })) <= 1) {
+      const exists = await tx.testCase.count({ where: { id: testId, problemId } });
+      if (exists) throw conflict('A published problem must keep at least one test case');
+    }
+    const { count } = await tx.testCase.deleteMany({ where: { id: testId, problemId } });
+    if (count === 0) throw notFound('Test case not found');
+  });
 }
 
 /**

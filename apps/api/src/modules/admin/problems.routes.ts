@@ -59,7 +59,7 @@ route(
     tags: ['Admin: problems'],
     auth: 'admin',
     request: { body: AdminProblemBody },
-    responses: { 201: AdminProblemSchema, 409: 'Slug already taken' },
+    responses: { 201: AdminProblemSchema, 409: 'Slug already taken, or publishing without tests' },
   },
   async (req, res) => {
     if (!req.user) throw unauthorized();
@@ -90,7 +90,11 @@ route(
     tags: ['Admin: problems'],
     auth: 'admin',
     request: { params: IdParams, body: AdminProblemBody },
-    responses: { 200: AdminProblemSchema, 404: 'Problem not found', 409: 'Slug already taken' },
+    responses: {
+      200: AdminProblemSchema,
+      404: 'Problem not found',
+      409: 'Slug already taken, or publishing without tests',
+    },
   },
   async (req, res) => {
     res.json(await updateAdminProblem(getDeps(req).prisma, req.params.id, req.body));
@@ -206,7 +210,7 @@ route(
     tags: ['Admin: problems'],
     auth: 'admin',
     request: { params: ProblemTestParams },
-    responses: { 204: null, 404: 'Test case not found' },
+    responses: { 204: null, 404: 'Test case not found', 409: 'Last test of a published problem' },
   },
   async (req, res) => {
     await deleteAdminTest(getDeps(req).prisma, req.params.id, req.params.testId);

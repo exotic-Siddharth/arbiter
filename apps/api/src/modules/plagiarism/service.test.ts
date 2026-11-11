@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { resetTables, setupTestDatabase } from '../../../test/db';
 import {
   createContest,
@@ -22,6 +22,10 @@ let prisma: PrismaClient;
 beforeAll(async () => {
   prisma = await setupTestDatabase();
   await resetTables(prisma);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000);
@@ -161,5 +165,41 @@ describe('runPlagiarismReport', () => {
     expect(failed.error).toMatch(/contest/i);
     expect(failed.finishedAt).not.toBeNull();
     await expect(runPlagiarismReport('no-such-report')).resolves.toBeUndefined();
+  });
+
+  it('yields to the event loop while comparing and loads sources only for the chosen candidates', async () => {
+    const s = await seed();
+    const report = await prisma.plagiarismReport.create({
+      data: { contestId: s.contest.id, problemId: s.a.id, threshold: 0.6 },
+    });
+    let ticks = 0;
+    let running = true;
+    const tick = () => {
+      ticks += 1;
+      if (running) setImmediate(tick);
+    };
+    setImmediate(tick);
+    let ticksAfterLastQuery = 0;
+    const loadedSources: number[] = [];
+    const original = prisma.submission.findMany.bind(prisma.submission) as (
+      args: unknown,
+    ) => Promise<{ sourceCode?: string }[]>;
+    vi.spyOn(prisma.submission, 'findMany').mockImplementation(((args: unknown) =>
+      original(args).then((rows) => {
+        loadedSources.push(rows.filter((r) => r.sourceCode !== undefined).length);
+        ticksAfterLastQuery = ticks;
+        return rows;
+      })) as never);
+    let ticksAtStore = -1;
+    const createMany = prisma.plagiarismPair.createMany.bind(prisma.plagiarismPair);
+    vi.spyOn(prisma.plagiarismPair, 'createMany').mockImplementation(((args: never) => {
+      ticksAtStore = ticks;
+      return createMany(args);
+    }) as never);
+    await runPlagiarismReport(report.id);
+    running = false;
+    expect(ticksAtStore).toBeGreaterThan(ticksAfterLastQuery);
+    // Problem A has 4 candidates (alice, bob, carol, dave) out of 7 contest submissions.
+    expect(loadedSources.reduce((sum, n) => sum + n, 0)).toBe(4);
   });
 });

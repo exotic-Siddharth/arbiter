@@ -1,5 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { loginViaUi, registerViaUi, setEditorCode, uniqueUsername } from './support/helpers';
+import {
+  loginViaUi,
+  registerViaUi,
+  setEditorCode,
+  trackForeignRequests,
+  uniqueUsername,
+} from './support/helpers';
 
 async function loginAsAdmin(page: Page) {
   await loginViaUi(page, 'admin', 'admin12345');
@@ -9,7 +15,10 @@ async function loginAsAdmin(page: Page) {
 test.describe('admin', () => {
   test('creates a problem with tests, and its reference solution validates to Accepted', async ({
     page,
+    baseURL,
   }) => {
+    // The Reference tab mounts Monaco and the statement preview renders math: no CDN (R18).
+    const foreign = trackForeignRequests(page, new URL(baseURL!).origin);
     await loginAsAdmin(page);
     const slug = uniqueUsername('sum').replace(/_/g, '-');
 
@@ -66,6 +75,7 @@ test.describe('admin', () => {
     await page.goto('/problems');
     await page.getByLabel('Search problems').fill('E2E Pair Sum');
     await expect(page.getByRole('link', { name: 'E2E Pair Sum' })).toBeVisible();
+    expect(foreign, 'requests to other origins').toEqual([]);
   });
 
   test('Generate outputs fills the expected output from the reference solution', async ({

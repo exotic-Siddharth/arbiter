@@ -1,26 +1,19 @@
-import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { Worker } from 'bullmq';
 import { env } from './config/env';
 import { WORKER_ID, startHeartbeat } from './judge/heartbeat';
 import { removeStaleSandboxes } from './judge/janitor';
-import { processJudgeJob, processRunJob } from './judge/processor';
-import {
-  QUEUE_NAMES,
-  type JudgeJobData,
-  type PlagiarismJobData,
-  type RunJobData,
-} from './judge/queue';
+import { reconcileStuckRows } from './judge/failure';
+import { QUEUE_NAMES } from './judge/queue';
+import { createWorkers, startMetricsServer } from './judge/workers';
 import { closeAll } from './lib/lifecycle';
 import { logger } from './lib/logger';
-import { metricsRegistry } from './lib/metrics';
-import { createRedisConnection } from './lib/redis';
-import { runPlagiarismReport } from './modules/plagiarism/service';
 
 /**
  * Worker process: BullMQ consumers for `judge`, `run` and `plagiarism` (spec section 8.8), its
  * own /metrics on WORKER_METRICS_PORT (R8), the heartbeat (judge:worker:<id>) and the janitor
- * that removes sandbox containers left over by crashed workers (R17). Owner: lane A2.
+ * that removes sandbox containers left over by crashed workers (R17). The queue wiring and the
+ * metrics server live in judge/workers.ts; the sweep also ends rows whose job was lost (A-06).
+ * Owner: lane A2.
  */
 const log = logger.child({ proc: 'worker', workerId: WORKER_ID });
 
@@ -34,6 +27,11 @@ async function sweep(): Promise<void> {
   } catch (error) {
     log.warn({ err: (error as Error).message }, 'janitor failed');
   }
+  try {
+    await reconcileStuckRows();
+  } catch (error) {
+    log.warn({ err: (error as Error).message }, 'reconciler failed');
+  }
 }
 
 // The heartbeat is written first, so the startup janitor never treats our own containers
@@ -45,59 +43,9 @@ await sweep();
 const janitorTimer = setInterval(() => void sweep(), JANITOR_INTERVAL_MS);
 janitorTimer.unref();
 
-const workerOptions = (concurrency: number) => ({
-  connection: createRedisConnection(),
-  prefix: env.QUEUE_PREFIX,
-  concurrency,
-});
+const workers = createWorkers();
 
-const workers = [
-  new Worker<JudgeJobData>(
-    QUEUE_NAMES.judge,
-    (job) => processJudgeJob(job),
-    workerOptions(env.JUDGE_CONCURRENCY),
-  ),
-  new Worker<RunJobData>(
-    QUEUE_NAMES.run,
-    (job) => processRunJob(job),
-    workerOptions(env.RUN_CONCURRENCY),
-  ),
-  new Worker<PlagiarismJobData>(
-    QUEUE_NAMES.plagiarism,
-    (job) => runPlagiarismReport(job.data.reportId),
-    workerOptions(1),
-  ),
-];
-
-for (const worker of workers) {
-  worker.on('failed', (job, error) => {
-    log.warn(
-      { queue: worker.name, jobId: job?.id, attempt: job?.attemptsMade, err: error.message },
-      'job failed',
-    );
-  });
-  worker.on('error', (error) => {
-    log.error({ queue: worker.name, err: error.message }, 'worker error');
-  });
-}
-
-const metricsServer = createServer((req, res) => {
-  if (req.method === 'GET' && req.url === '/metrics') {
-    metricsRegistry
-      .metrics()
-      .then((body) => {
-        res.writeHead(200, { 'Content-Type': metricsRegistry.contentType }).end(body);
-      })
-      .catch((error: unknown) => {
-        log.error({ err: (error as Error).message }, 'metrics collection failed');
-        res.writeHead(500).end();
-      });
-    return;
-  }
-  res.writeHead(404).end();
-});
-
-metricsServer.listen(env.WORKER_METRICS_PORT, () => {
+const metricsServer = startMetricsServer(env.WORKER_METRICS_PORT, () => {
   const { port } = metricsServer.address() as AddressInfo;
   log.info(
     { queues: Object.values(QUEUE_NAMES), prefix: env.QUEUE_PREFIX, metricsPort: port },

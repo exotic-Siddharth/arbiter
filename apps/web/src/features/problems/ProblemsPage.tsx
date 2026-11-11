@@ -6,6 +6,7 @@ import { Button, Card, EmptyState, Pagination, QueryState, TableSkeleton } from 
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { qk } from '@/lib/queryKeys';
+import { useClampPage } from '@/lib/useClampPage';
 import { useCurrentUser } from '@/stores/auth';
 import { ProblemFilters } from './components/ProblemFilters';
 import { ProblemTable } from './components/ProblemTable';
@@ -37,6 +38,11 @@ export function Component() {
     placeholderData: keepPreviousData,
   });
 
+  const { set } = filters;
+  useClampPage(problems.data, problems.isPlaceholderData, (last) =>
+    set({ page: last }, { replace: true }),
+  );
+
   const tags = useQuery({
     queryKey: qk.tags,
     queryFn: ({ signal }) => api.get('/tags', { schema: TagListSchema, signal }),
@@ -61,7 +67,7 @@ export function Component() {
         <QueryState
           query={problems}
           loading={<TableSkeleton rows={8} columns={5} />}
-          isEmpty={(data) => data.items.length === 0}
+          isEmpty={(data) => data.items.length === 0 && data.total === 0}
           empty={
             <EmptyState
               icon={<SearchX />}

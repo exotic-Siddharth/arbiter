@@ -245,6 +245,8 @@ export const ContestLabelSchema = z
   .string()
   .regex(/^[A-Z]{1,2}$/, 'Labels are one or two upper-case letters, e.g. A');
 
+const CONTEST_MAX_MS = LIMITS.contestMaxDays * 24 * 60 * 60 * 1000;
+
 /** POST /api/admin/contests and PUT /api/admin/contests/:id (full replace). */
 export const AdminContestBody = z
   .object({
@@ -267,6 +269,12 @@ export const AdminContestBody = z
         code: z.ZodIssueCode.custom,
         path: ['endsAt'],
         message: 'endsAt must be after startsAt',
+      });
+    } else if (Date.parse(value.endsAt) - Date.parse(value.startsAt) > CONTEST_MAX_MS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endsAt'],
+        message: `A contest lasts at most ${LIMITS.contestMaxDays} days`,
       });
     }
     const labels = new Set<string>();
@@ -314,6 +322,8 @@ export const AdminContestSchema = z.object({
   ratedAt: IsoDateTime.nullable(),
   status: ContestStatusSchema,
   participantCount: NonNegativeInt,
+  /** Counted submissions still QUEUED/COMPILING/RUNNING: ratings cannot be applied while > 0. */
+  pendingSubmissions: NonNegativeInt,
   problems: z.array(AdminContestProblemSchema),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,

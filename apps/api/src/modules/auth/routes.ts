@@ -9,9 +9,9 @@ import type { PrismaClient, User } from '@prisma/client';
 import type { Request, Response } from 'express';
 import { env } from '../../config/env';
 import { getDeps } from '../../lib/deps';
-import { notFound, unauthorized } from '../../lib/errors';
+import { isAppError, notFound, unauthorized } from '../../lib/errors';
 import { signAccessToken } from '../../lib/jwt';
-import { RATE_LIMITS, rateLimit } from '../../lib/rateLimit';
+import { RATE_LIMITS, clientIpKey, rateLimit } from '../../lib/rateLimit';
 import { createRouter } from '../../lib/router';
 import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './cookie';
 import { authenticate, registerUser, toMe } from './service';
@@ -48,7 +48,7 @@ async function startSession(
 const registerLimiter = rateLimit({
   name: 'register',
   ...RATE_LIMITS.register,
-  key: (req) => req.ip ?? 'unknown',
+  key: (req) => clientIpKey(req.ip),
 });
 
 const loginLimiter = rateLimit({
@@ -56,14 +56,14 @@ const loginLimiter = rateLimit({
   ...RATE_LIMITS.login,
   key: (req) => {
     const identifier = (req.body as { identifier?: unknown } | undefined)?.identifier;
-    return `${req.ip ?? 'unknown'}|${typeof identifier === 'string' ? identifier.toLowerCase() : ''}`;
+    return `${clientIpKey(req.ip)}|${typeof identifier === 'string' ? identifier.toLowerCase() : ''}`;
   },
 });
 
 const demoLimiter = rateLimit({
   name: 'login',
   ...RATE_LIMITS.login,
-  key: (req) => `${req.ip ?? 'unknown'}|demo`,
+  key: (req) => `${clientIpKey(req.ip)}|demo`,
 });
 
 route(
@@ -131,7 +131,8 @@ route(
     if (!env.DEMO_LOGIN_ENABLED) throw notFound('Demo login is disabled');
     const { prisma } = getDeps(req);
     const user = await prisma.user.findUnique({ where: { usernameLower: 'demo' } });
-    if (!user) throw notFound('The demo user does not exist');
+    // Only a plain USER account may be reached without a password.
+    if (user?.role !== 'USER') throw notFound('The demo user does not exist');
     await startSession(req, res, prisma, user, 200);
   },
 );
@@ -161,7 +162,8 @@ route(
       const body: AuthResponse = { user: toMe(session.user), accessToken: session.accessToken };
       res.json(body);
     } catch (error) {
-      clearRefreshCookie(res);
+      // Only a rejected token ends the session; a server error keeps the (still valid) cookie.
+      if (isAppError(error) && error.status === 401) clearRefreshCookie(res);
       throw error;
     }
   },

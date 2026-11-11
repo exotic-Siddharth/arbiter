@@ -20,8 +20,13 @@ export function UserMenu({ user }: { user: Me }) {
   const location = useLocation();
 
   const onLogout = async () => {
-    await logout();
-    toast.success('Logged out');
+    const revoked = await logout();
+    if (revoked) toast.success('Logged out');
+    else {
+      toast.warning('Logged out on this device, but the server could not confirm it.', {
+        description: 'Your session may still be valid elsewhere. Log in and out again to be sure.',
+      });
+    }
     if (location.pathname.startsWith('/admin')) void navigate('/');
   };
 

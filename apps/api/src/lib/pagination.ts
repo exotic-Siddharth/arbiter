@@ -16,9 +16,9 @@ function whole(value: number | undefined, fallback: number): number {
   return value !== undefined && Number.isFinite(value) ? Math.floor(value) : fallback;
 }
 
-/** ?page&pageSize (already parsed by PageQuery) -> Prisma skip/take. Clamps page >= 1, 1 <= pageSize <= 100. */
+/** ?page&pageSize (already parsed by PageQuery) -> Prisma skip/take. Clamps 1 <= page <= pageMax, 1 <= pageSize <= 100. */
 export function paginate(query: Partial<PageParams> = {}): Pagination {
-  const page = Math.max(1, whole(query.page, 1));
+  const page = Math.min(LIMITS.pageMax, Math.max(1, whole(query.page, 1)));
   const pageSize = Math.min(
     LIMITS.pageSizeMax,
     Math.max(1, whole(query.pageSize, LIMITS.pageSizeDefault)),

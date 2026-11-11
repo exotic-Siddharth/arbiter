@@ -81,34 +81,67 @@ export async function listPlagiarismReports(
   return rows.map(toSummary);
 }
 
+/** The detail response carries at most this many pairs (highest similarity first). */
+export const MAX_DETAIL_PAIRS = 200;
+
 const asLines = (value: Prisma.JsonValue): number[] =>
   Array.isArray(value)
     ? value.filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n > 0)
     : [];
 
-/** GET /api/admin/plagiarism/:id: pairs by similarity, highest first, with both sources. */
+/**
+ * GET /api/admin/plagiarism/:id: the top MAX_DETAIL_PAIRS pairs by similarity (highest first,
+ * ties by id), with both sources; `pairCount` is the total stored.
+ */
 export async function getPlagiarismReport(
   prisma: PrismaClient,
   id: string,
 ): Promise<PlagiarismReportDetail> {
-  const row = await prisma.plagiarismReport.findUnique({
-    where: { id },
-    include: {
-      ...summaryInclude,
-      pairs: { orderBy: [{ similarity: 'desc' }, { id: 'asc' }] },
-    },
-  });
+  const row = await prisma.plagiarismReport.findUnique({ where: { id }, include: summaryInclude });
   if (!row) throw notFound('Report not found');
 
-  const submissionIds = [...new Set(row.pairs.flatMap((p) => [p.submissionAId, p.submissionBId]))];
-  const problemIds = [...new Set(row.pairs.map((p) => p.problemId))];
+  // Light rows for every pair; sources and matched lines are loaded for the capped set only.
+  const allPairs = await prisma.plagiarismPair.findMany({
+    where: { reportId: id },
+    orderBy: [{ similarity: 'desc' }, { id: 'asc' }],
+    select: { id: true, problemId: true, submissionAId: true, submissionBId: true },
+  });
+  const [existingSubmissions, existingProblems] = await Promise.all([
+    prisma.submission.findMany({
+      where: {
+        id: { in: [...new Set(allPairs.flatMap((p) => [p.submissionAId, p.submissionBId]))] },
+      },
+      select: { id: true },
+    }),
+    prisma.problem.findMany({
+      where: { id: { in: [...new Set(allPairs.map((p) => p.problemId))] } },
+      select: { id: true },
+    }),
+  ]);
+  const submissionIds = new Set(existingSubmissions.map((s) => s.id));
+  const problemIds = new Set(existingProblems.map((p) => p.id));
+  // Pairs whose submissions or problem were deleted since the run are left out, before the cap.
+  const keptIds = allPairs
+    .filter(
+      (p) =>
+        submissionIds.has(p.submissionAId) &&
+        submissionIds.has(p.submissionBId) &&
+        problemIds.has(p.problemId),
+    )
+    .slice(0, MAX_DETAIL_PAIRS)
+    .map((p) => p.id);
+
+  const rows = await prisma.plagiarismPair.findMany({
+    where: { id: { in: keptIds } },
+    orderBy: [{ similarity: 'desc' }, { id: 'asc' }],
+  });
   const [submissions, problems] = await Promise.all([
     prisma.submission.findMany({
-      where: { id: { in: submissionIds } },
+      where: { id: { in: [...new Set(rows.flatMap((p) => [p.submissionAId, p.submissionBId]))] } },
       select: { id: true, language: true, sourceCode: true, user: { select: { username: true } } },
     }),
     prisma.problem.findMany({
-      where: { id: { in: problemIds } },
+      where: { id: { in: [...new Set(rows.map((p) => p.problemId))] } },
       select: { id: true, slug: true, title: true },
     }),
   ]);
@@ -127,8 +160,7 @@ export async function getPlagiarismReport(
     };
   };
 
-  // Pairs whose submissions or problem were deleted since the run are left out.
-  const pairs: PlagiarismPair[] = row.pairs.flatMap((pair) => {
+  const pairs: PlagiarismPair[] = rows.flatMap((pair) => {
     const a = side(pair.submissionAId, pair.matchedLinesA);
     const b = side(pair.submissionBId, pair.matchedLinesB);
     const problem = problemById.get(pair.problemId);

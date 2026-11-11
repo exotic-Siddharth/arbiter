@@ -86,4 +86,30 @@ describe('DropdownMenu', () => {
     await user.click(document.body);
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
+
+  it('Tab closes the menu and continues from the trigger', async () => {
+    const user = userEvent.setup();
+    const router = createMemoryRouter(
+      [
+        {
+          path: '*',
+          element: (
+            <>
+              <DropdownMenu trigger="Actions" triggerLabel="Problem actions">
+                <MenuItem onSelect={() => {}}>Delete</MenuItem>
+              </DropdownMenu>
+              <button type="button">Next control</button>
+            </>
+          ),
+        },
+      ],
+      { initialEntries: ['/'] },
+    );
+    render(<RouterProvider router={router} />);
+    await user.click(screen.getByRole('button', { name: 'Problem actions' }));
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument();
+    await user.keyboard('{Tab}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next control' })).toHaveFocus();
+  });
 });

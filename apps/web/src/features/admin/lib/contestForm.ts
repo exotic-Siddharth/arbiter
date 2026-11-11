@@ -20,6 +20,8 @@ export interface ContestFormState {
   penaltyMinutes: string;
   isPublished: boolean;
   problems: ContestFormProblem[];
+  /** Saved ISO times: kept as sent while the picker still shows them (it drops seconds). */
+  original?: { startsAt: string; endsAt: string };
 }
 
 const HOUR_MS = 3_600_000;
@@ -48,6 +50,7 @@ export function contestToForm(contest: AdminContest): ContestFormState {
     endsAt: isoToLocalInput(contest.endsAt),
     penaltyMinutes: String(contest.penaltyMinutes),
     isPublished: contest.isPublished,
+    original: { startsAt: contest.startsAt, endsAt: contest.endsAt },
     problems: [...contest.problems]
       .sort((a, b) => a.ordinal - b.ordinal)
       .map((problem) => ({
@@ -73,9 +76,15 @@ export function nextLabel(used: readonly string[]): string {
 export type ContestFormResult =
   { ok: true; body: AdminContestBody } | { ok: false; errors: Record<string, string> };
 
+/** The saved ISO time while the picker value is unchanged, else the picker value as ISO. */
+function pickedIso(value: string, original: string | undefined): string | null {
+  if (original !== undefined && value === isoToLocalInput(original)) return original;
+  return localInputToIso(value);
+}
+
 export function contestFormToBody(form: ContestFormState): ContestFormResult {
-  const startsAt = localInputToIso(form.startsAt);
-  const endsAt = localInputToIso(form.endsAt);
+  const startsAt = pickedIso(form.startsAt, form.original?.startsAt);
+  const endsAt = pickedIso(form.endsAt, form.original?.endsAt);
   const early: Record<string, string> = {};
   if (!startsAt) early.startsAt = 'Pick a start time';
   if (!endsAt) early.endsAt = 'Pick an end time';

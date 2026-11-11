@@ -124,9 +124,9 @@ export const optionalUpperEnum = <T extends [string, ...string[]]>(schema: z.Zod
 /** "true"/"false" query flag. z.coerce.boolean() would turn "false" into true. */
 export const booleanQuery = z.enum(['true', 'false']).transform((value) => value === 'true');
 
-/** ?page=1&pageSize=20 (max 100). */
+/** ?page=1&pageSize=20 (page up to LIMITS.pageMax, pageSize max 100). */
 export const PageQuery = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(LIMITS.pageMax).default(1),
   pageSize: z.coerce.number().int().min(1).max(LIMITS.pageSizeMax).default(LIMITS.pageSizeDefault),
 });
 export type PageQuery = z.infer<typeof PageQuery>;

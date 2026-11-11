@@ -2,9 +2,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { getRedis } from '../lib/redis';
 import { fingerprints, similarity, tokenize } from '../modules/plagiarism/winnow';
 import { GEN_COMMAND, SeedDataError, assertHiddenTests, lf } from './problems';
 import { createRng } from './rng';
+import { clearScoreboardCaches } from './run';
 import { simulateContest, simulatePractice, type SimProblem } from './simulate';
 import {
   breakSource,
@@ -186,5 +188,22 @@ describe('hidden-test guard', () => {
     const root = fakeRoot(12);
     writeFileSync(join(root, 'CHECKSUMS.sha256'), `${'0'.repeat(64)} *demo-problem/tests/13.in\n`);
     expect(() => assertHiddenTests(root)).toThrow(/13\.in/);
+  });
+});
+
+describe('clearScoreboardCaches', () => {
+  it('deletes every contest scoreboard key (including the lock) and leaves other keys alone', async () => {
+    const redis = getRedis();
+    const id = `seedtest${Date.now()}`;
+    const scoreboard = ['rank', 'rows', 'updatedAt', 'lock'].map((part) => `contest:${id}:${part}`);
+    const others = [`contest:${id}:other`, `bull:${id}:wait`, `sessions:${id}`];
+    await Promise.all([...scoreboard, ...others].map((key) => redis.set(key, '1')));
+    try {
+      await clearScoreboardCaches();
+      expect(await redis.exists(...scoreboard)).toBe(0);
+      expect(await redis.exists(...others)).toBe(others.length);
+    } finally {
+      await redis.del(...scoreboard, ...others);
+    }
   });
 });

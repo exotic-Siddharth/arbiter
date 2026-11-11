@@ -17,14 +17,15 @@ const LAYERS: readonly Layer[] = [
   {
     title: 'A read-only world',
     detail:
-      'The root filesystem cannot be written. Only a small in-memory scratch disk is available.',
-    flags: '--read-only --tmpfs /work:128m',
+      'The root filesystem cannot be written. Only small in-memory scratch disks (/work and /tmp) are available.',
+    flags: '--read-only --tmpfs /work:128m --tmpfs /tmp:32m',
   },
   {
     title: 'Privileges dropped',
     detail:
-      'No Linux capabilities, no privilege escalation. The program runs as an unprivileged user.',
-    flags: '--cap-drop ALL --security-opt no-new-privileges',
+      'All Linux capabilities are dropped except SETUID, SETGID and KILL, which the harness keeps to switch to an unprivileged user and to kill stray processes. The program itself runs with none, and cannot gain privileges.',
+    flags:
+      '--cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add KILL --security-opt no-new-privileges',
   },
   {
     title: 'Hard resource limits',

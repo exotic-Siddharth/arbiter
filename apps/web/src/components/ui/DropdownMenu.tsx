@@ -119,7 +119,8 @@ export function DropdownMenu({
       close(true);
       return;
     } else if (event.key === 'Tab') {
-      close(false);
+      // Focus the trigger first (no preventDefault) so the browser's Tab continues from there.
+      close(true);
       return;
     }
     if (next) {

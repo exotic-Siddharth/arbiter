@@ -109,7 +109,7 @@ export function ExistingProblem({ id }: { id: string }) {
               </TabsTrigger>
               <TabsTrigger value="reference">Reference</TabsTrigger>
             </TabsList>
-            <TabsContent value="details" className="pt-5">
+            <TabsContent value="details" keepMounted className="pt-5">
               {data.testCount === 0 && !data.isPublished ? (
                 <Alert tone="info" className="mb-5" title="Next step: add tests">
                   A problem needs tests (at least the samples) before it can be judged. Use the

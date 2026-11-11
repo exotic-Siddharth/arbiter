@@ -5,12 +5,13 @@ import { Page } from '@/components/layout/Page';
 import { LiveScoreboard } from './components/LiveScoreboard';
 import { ContestStatusBadge } from './components/ContestStatusBadge';
 import { useContest } from './hooks/useContest';
+import { parsePageParam } from './lib/page';
 
 /** /contests/:slug/scoreboard: the full live ICPC table with pagination (spec 13.2). */
 export function Component() {
   const { slug = '' } = useParams();
   const [params, setParams] = useSearchParams();
-  const page = Math.max(1, Number(params.get('page')) || 1);
+  const page = parsePageParam(params.get('page'));
   const { contest, boundary, offsetMs, onBoundary } = useContest(slug);
 
   const eyebrow = (

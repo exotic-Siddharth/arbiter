@@ -312,6 +312,32 @@ describe('POST /api/submissions with contestSlug', () => {
     ).toBe(404);
   });
 
+  it('an upcoming contest answers identically for member, non-member and missing problems', async () => {
+    const draftOutside = await createProblem(prisma, { isPublished: false });
+    const answers = [];
+    for (const problemSlug of [contestProblem.slug, draftOutside.slug, `missing-${s}`]) {
+      const res = await submit(player, { problemSlug, contestSlug: upcoming.slug });
+      answers.push([res.status, res.body.error.message]);
+    }
+    expect(answers[0]![0]).toBe(403);
+    expect(answers[1]).toEqual(answers[0]);
+    expect(answers[2]).toEqual(answers[0]);
+  });
+
+  it('a running contest does not tell a draft problem from a missing one', async () => {
+    const draftOutside = await createProblem(prisma, { isPublished: false });
+    const draft = await submit(player, {
+      problemSlug: draftOutside.slug,
+      contestSlug: running.slug,
+    });
+    const missing = await submit(player, {
+      problemSlug: `missing-${s}`,
+      contestSlug: running.slug,
+    });
+    expect(draft.status).toBe(404);
+    expect(draft.body).toEqual(missing.body);
+  });
+
   it('hides an unpublished contest from non-admins', async () => {
     const draft = await createContest(prisma, {
       isPublished: false,

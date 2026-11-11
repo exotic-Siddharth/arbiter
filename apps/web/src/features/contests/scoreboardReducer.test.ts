@@ -86,6 +86,37 @@ describe('scoreboardReducer', () => {
     expect(next.stale).toBe(false);
   });
 
+  it('marks the page stale when its last row worsens while later pages exist', () => {
+    const state = load(
+      board([row('p1', 1, 10, 1), row('p2', 1, 30, 2)], { total: 3, pageSize: 2 }),
+    );
+    // p2 gains penalty (50) and may now sit behind p3 (40) on the next page.
+    const worse = scoreboardReducer(state, {
+      type: 'row',
+      contestSlug: 'weekly',
+      row: row('p2', 1, 50, 2),
+      at: 2000,
+    });
+    expect(worse.stale).toBe(true);
+    // An improvement of the last row keeps the page exact.
+    const better = scoreboardReducer(state, {
+      type: 'row',
+      contestSlug: 'weekly',
+      row: row('p2', 1, 20, 2),
+      at: 2000,
+    });
+    expect(better.stale).toBe(false);
+    // Nothing follows this page: a worse last row is still exact.
+    const only = load(board([row('p1', 1, 10, 1), row('p2', 1, 30, 2)], { pageSize: 2 }));
+    const alone = scoreboardReducer(only, {
+      type: 'row',
+      contestSlug: 'weekly',
+      row: row('p2', 1, 50, 2),
+      at: 2000,
+    });
+    expect(alone.stale).toBe(false);
+  });
+
   it('gives equal (solved, penalty) the same rank and skips the next ones', () => {
     const state = load(
       board([row('alice', 2, 100, 1), row('bob', 1, 30, 2), row('carol', 1, 50, 3)]),

@@ -9,6 +9,7 @@ import {
 } from '@arbiter/shared';
 import type { PrismaClient } from '@prisma/client';
 import { createAdapter } from '@socket.io/redis-adapter';
+import jwt from 'jsonwebtoken';
 import { Server, type Socket } from 'socket.io';
 import { env } from '../config/env';
 import { prisma as defaultPrisma } from '../db/prisma';
@@ -21,6 +22,8 @@ import { rooms } from './rooms';
 export interface SocketData {
   /** Set from the handshake token (auth: { token }); undefined for guests. */
   user?: AuthUser;
+  /** Access-token expiry (epoch ms) of an authenticated socket; undefined for guests. */
+  expiresAt?: number;
   /** contest slug -> contest id for the contest rooms this socket joined. */
   contests: Map<string, string>;
 }
@@ -44,7 +47,41 @@ export interface RealtimeServer {
   close(): Promise<void>;
 }
 
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
 const noopAck: AckCallback = () => {};
+
+/**
+ * Per-socket token bucket: every room event may hit Postgres, so one connection must not bypass
+ * the HTTP rate limit. A client uses a few events on connect or reconnect; a flood is answered
+ * with RATE_LIMITED, and a socket that keeps flooding is disconnected.
+ */
+const EVENT_BUCKET_CAPACITY = 20;
+const EVENT_REFILL_PER_SEC = 10;
+const MAX_REJECTED_EVENTS = 25;
+
+function limitEvents(socket: ArbiterSocket): void {
+  let tokens = EVENT_BUCKET_CAPACITY;
+  let refilledAt = Date.now();
+  let rejected = 0;
+  socket.use((packet, next) => {
+    const now = Date.now();
+    tokens = Math.min(
+      EVENT_BUCKET_CAPACITY,
+      tokens + ((now - refilledAt) / 1000) * EVENT_REFILL_PER_SEC,
+    );
+    refilledAt = now;
+    if (tokens >= 1) {
+      tokens -= 1;
+      next();
+      return;
+    }
+    // Drop the packet (no handler, no database lookup); answer an ack so the client does not hang.
+    splitArgs(packet.slice(1)).ack({ ok: false, error: 'RATE_LIMITED' });
+    rejected += 1;
+    if (rejected >= MAX_REJECTED_EVENTS) socket.disconnect(true);
+  });
+}
 
 /** Handlers take (payload?, ack?) defensively: the ack is always the last function argument. */
 function splitArgs(args: unknown[]): { payload: unknown; ack: AckCallback } {
@@ -52,6 +89,13 @@ function splitArgs(args: unknown[]): { payload: unknown; ack: AckCallback } {
   const ack = typeof last === 'function' ? (last as AckCallback) : noopAck;
   const payload = typeof args[0] === 'function' ? undefined : args[0];
   return { payload, ack };
+}
+
+/** The admin privilege is re-read from the database: the handshake claim may be stale (demotion). */
+async function isCurrentAdmin(prisma: PrismaClient, user: AuthUser | undefined): Promise<boolean> {
+  if (user?.role !== 'ADMIN') return false;
+  const current = await prisma.user.findUnique({ where: { id: user.id }, select: { role: true } });
+  return current?.role === 'ADMIN';
 }
 
 function registerRoomHandlers(socket: ArbiterSocket, prisma: PrismaClient): void {
@@ -72,7 +116,7 @@ function registerRoomHandlers(socket: ArbiterSocket, prisma: PrismaClient): void
         select: { userId: true },
       });
       if (!submission) return ack({ ok: false, error: 'NOT_FOUND' });
-      if (submission.userId !== user.id && user.role !== 'ADMIN') {
+      if (submission.userId !== user.id && !(await isCurrentAdmin(prisma, user))) {
         return ack({ ok: false, error: 'FORBIDDEN' });
       }
       await socket.join(rooms.submission(parsed.data.id));
@@ -99,7 +143,7 @@ function registerRoomHandlers(socket: ArbiterSocket, prisma: PrismaClient): void
         where: { slug: parsed.data.slug },
         select: { id: true, isPublished: true },
       });
-      if (!contest || (!contest.isPublished && socket.data.user?.role !== 'ADMIN')) {
+      if (!contest || (!contest.isPublished && !(await isCurrentAdmin(prisma, socket.data.user)))) {
         return ack({ ok: false, error: 'NOT_FOUND' });
       }
       socket.data.contests.set(parsed.data.slug, contest.id);
@@ -167,6 +211,8 @@ export function initRealtime(
       if (typeof token !== 'string') throw new Error('token must be a string');
       const claims = verifyAccessToken(token);
       socket.data.user = { id: claims.sub, username: claims.username, role: claims.role };
+      const exp = (jwt.decode(token) as { exp?: number } | null)?.exp;
+      if (typeof exp === 'number') socket.data.expiresAt = exp * 1000;
       next();
     } catch {
       next(new Error(SOCKET_AUTH_ERROR));
@@ -176,6 +222,17 @@ export function initRealtime(
   io.on('connection', (socket) => {
     const user = socket.data.user;
     if (user) void socket.join(rooms.user(user.id));
+    if (socket.data.expiresAt !== undefined) {
+      // The token was checked once, at the handshake: end the connection when it expires. The
+      // client reconnects with its refreshed token (a stale one fails with UNAUTHORIZED first).
+      const timer = setTimeout(
+        () => socket.disconnect(true),
+        Math.min(Math.max(socket.data.expiresAt - Date.now(), 0), MAX_TIMER_MS),
+      );
+      timer.unref();
+      socket.once('disconnect', () => clearTimeout(timer));
+    }
+    limitEvents(socket);
     registerRoomHandlers(socket, prisma);
   });
 

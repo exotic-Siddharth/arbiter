@@ -2,6 +2,7 @@ import type { ContestDetail } from '@arbiter/shared';
 import { Countdown } from '@/components';
 import { Card, ProgressBar } from '@/components/ui';
 import { formatDateTime, formatDuration, formatNumber, pluralize } from '@/lib/format';
+import { useNow } from '@/lib/time';
 import { contestElapsed, contestLength, type ContestBoundary } from '../lib/contestClock';
 import { ContestStatusBadge } from './ContestStatusBadge';
 
@@ -10,8 +11,6 @@ export interface ContestHeroProps {
   boundary: ContestBoundary;
   offsetMs: number;
   onBoundary: () => void;
-  /** Client ms the boundary was evaluated at (for the elapsed bar). */
-  evaluatedAt: number;
 }
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
@@ -24,14 +23,9 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 }
 
 /** Contest header card: status, the server-corrected countdown and the schedule facts. */
-export function ContestHero({
-  contest,
-  boundary,
-  offsetMs,
-  onBoundary,
-  evaluatedAt,
-}: ContestHeroProps) {
-  const elapsed = contestElapsed(contest, evaluatedAt + offsetMs);
+export function ContestHero({ contest, boundary, offsetMs, onBoundary }: ContestHeroProps) {
+  const now = useNow(1000);
+  const elapsed = contestElapsed(contest, now + offsetMs);
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-col gap-6 p-5 sm:p-6 md:flex-row md:items-center md:justify-between">

@@ -1,9 +1,9 @@
 import { StatsSchema } from '@arbiter/shared';
 import type { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../app';
-import { addDays, addMinutes } from '../../lib/time';
+import { addDays, addMinutes, clock } from '../../lib/time';
 import { resetTables, setupTestDatabase } from '../../../test/db';
 import {
   createContest,
@@ -26,6 +26,10 @@ beforeAll(async () => {
   await resetTables(prisma);
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('GET /api/stats', () => {
   it('is all zeros on an empty database', async () => {
     expect(await getStats()).toEqual({
@@ -44,7 +48,9 @@ describe('GET /api/stats', () => {
     await createProblem(prisma);
     await createProblem(prisma, { isPublished: false });
 
-    const now = new Date();
+    // Pinned mid-day UTC: a run crossing 00:00 UTC cannot move judgedToday.
+    const now = new Date('2026-06-15T12:00:00.000Z');
+    vi.spyOn(clock, 'now').mockReturnValue(now);
     const startOfToday = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
     );
@@ -82,7 +88,8 @@ describe('GET /api/stats', () => {
       judgedAt: now,
     });
 
-    await createContest(prisma); // running
+    const running = { startsAt: addMinutes(now, -60), endsAt: addMinutes(now, 60) };
+    await createContest(prisma, running); // running
     await createContest(prisma, {
       startsAt: addDays(now, 1),
       endsAt: addDays(now, 2),
@@ -91,7 +98,7 @@ describe('GET /api/stats', () => {
       startsAt: addDays(now, -2),
       endsAt: addDays(now, -1),
     }); // ended
-    await createContest(prisma, { isPublished: false }); // running but unpublished
+    await createContest(prisma, { ...running, isPublished: false }); // running but unpublished
 
     expect(await getStats()).toEqual({
       problems: 2,

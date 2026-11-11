@@ -84,6 +84,8 @@ model User {
   registrations    ContestRegistration[]
   ratingChanges    RatingChange[]
   authoredProblems Problem[]             @relation("ProblemAuthor")
+
+  @@index([rating])
 }
 
 model RefreshToken {
@@ -126,6 +128,8 @@ model Problem {
   testCases         TestCase[]
   submissions       Submission[]
   contestProblems   ContestProblem[]
+
+  @@index([authorId])
 }
 
 model Tag {
@@ -141,6 +145,7 @@ model ProblemTag {
   tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([problemId, tagId])
+  @@index([tagId])
 }
 
 model TestCase {
@@ -183,6 +188,7 @@ model Submission {
   @@index([problemId, createdAt])
   @@index([contestId, createdAt])
   @@index([createdAt])
+  @@index([verdict, userId, problemId])
 }
 
 model SubmissionTestResult {
@@ -229,6 +235,7 @@ model ContestProblem {
 
   @@id([contestId, problemId])
   @@unique([contestId, label])
+  @@index([problemId])
 }
 
 model ContestRegistration {
@@ -239,6 +246,7 @@ model ContestRegistration {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([contestId, userId])
+  @@index([userId])
 }
 
 model RatingChange {
@@ -253,6 +261,7 @@ model RatingChange {
   contest   Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
 
   @@unique([userId, contestId])
+  @@index([contestId])
 }
 
 model PlagiarismReport {
@@ -266,6 +275,8 @@ model PlagiarismReport {
   createdAt  DateTime         @default(now())
   finishedAt DateTime?
   pairs      PlagiarismPair[]
+
+  @@index([contestId])
 }
 
 model PlagiarismPair {

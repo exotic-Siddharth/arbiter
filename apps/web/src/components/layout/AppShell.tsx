@@ -1,8 +1,10 @@
+import { useRef } from 'react';
 import { Outlet, ScrollRestoration, useMatches } from 'react-router';
 import { cn } from '@/lib/cn';
 import { Footer } from './Footer';
 import { Navbar } from './Navbar';
 import { NavigationProgress } from './NavigationProgress';
+import { RouteAnnouncer } from './RouteAnnouncer';
 
 /** Route `handle` read by the shell (set in router.tsx). */
 export interface RouteHandle {
@@ -16,6 +18,7 @@ export interface RouteHandle {
  */
 export function AppShell() {
   const matches = useMatches();
+  const mainRef = useRef<HTMLElement>(null);
   const workspace = matches.some(
     (match) => (match.handle as RouteHandle | undefined)?.layout === 'workspace',
   );
@@ -32,12 +35,14 @@ export function AppShell() {
       <Navbar />
       <main
         id="main"
+        ref={mainRef}
         tabIndex={-1}
         className={cn('flex flex-1 flex-col outline-none', workspace && 'min-h-0')}
       >
         <Outlet />
       </main>
       {workspace ? null : <Footer />}
+      <RouteAnnouncer mainRef={mainRef} />
       <ScrollRestoration />
     </div>
   );

@@ -19,12 +19,16 @@ export interface AuthState {
   register(body: RegisterBody): Promise<Me>;
   /** POST /auth/demo (R4): logs in as the demo user. */
   loginDemo(): Promise<Me>;
-  /** POST /auth/logout; the local session is cleared immediately, even if the request fails. */
-  logout(): Promise<void>;
+  /**
+   * POST /auth/logout; the local session is cleared immediately, even if the request fails.
+   * Resolves true when the server confirmed the logout (the refresh cookie was revoked).
+   */
+  logout(): Promise<boolean>;
   /**
    * POST /auth/refresh, single-flight: concurrent callers (boot, every 401, the socket) share
    * one request, serialised across tabs with navigator.locks. Resolves true when the session
-   * was renewed. A rejected refresh token logs out; a network failure keeps the session.
+   * was renewed. A rejected refresh token (401/403) logs out; a network failure, a 5xx or a
+   * transient 4xx such as 429 (the cookie is still valid) keeps the session.
    */
   refresh(): Promise<boolean>;
   /** Silent refresh on app boot (idempotent; main.tsx calls it once). */
@@ -97,9 +101,11 @@ export const useAuth = create<AuthState>()((set, get) => {
       sessionEpoch += 1;
       clearSession();
       try {
-        await send({ method: 'POST', path: '/auth/logout' });
+        const response = await send({ method: 'POST', path: '/auth/logout' });
+        return response.ok;
       } catch {
-        // Best effort: the local session is gone either way.
+        // The local session is gone either way; the caller tells the user the server was not told.
+        return false;
       }
     },
 
@@ -114,7 +120,7 @@ export const useAuth = create<AuthState>()((set, get) => {
         })
         .catch((error: unknown) => {
           if (epoch !== sessionEpoch) return false;
-          if (isApiError(error) && error.status >= 400 && error.status < 500) {
+          if (isApiError(error) && (error.status === 401 || error.status === 403)) {
             const wasSignedIn = get().status === 'authenticated';
             clearSession();
             if (wasSignedIn) toast.info('Your session has expired. Please log in again.');

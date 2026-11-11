@@ -26,6 +26,44 @@ export const RATE_LIMITS: Record<LimiterName, { windowMs: number; limit: number 
   runs: { windowMs: 60_000, limit: 12 },
 };
 
+/**
+ * Rate-limit bucket id of a client address. IPv4 is unchanged and IPv4-mapped IPv6 is unwrapped.
+ * Every other IPv6 address is reduced to its /64 prefix: one client typically owns a whole /64, so
+ * keying on the full address would hand it a fresh bucket per address.
+ */
+export function clientIpKey(ip: string | undefined): string {
+  if (!ip) return 'unknown';
+  const address = ip.split('%')[0].toLowerCase();
+  if (!address.includes(':')) return address;
+  const tail = /^(.*:)(\d+\.\d+\.\d+\.\d+)$/.exec(address);
+  let text = address;
+  if (tail) {
+    const octets = tail[2].split('.').map(Number);
+    if (tail[1] === '::ffff:') return tail[2];
+    text = `${tail[1]}${((octets[0] << 8) | octets[1]).toString(16)}:${((octets[2] << 8) | octets[3]).toString(16)}`;
+  }
+  const [head, rest] = text.split('::');
+  const headGroups = head ? head.split(':') : [];
+  const restGroups = rest === undefined ? [] : rest ? rest.split(':') : [];
+  const groups =
+    rest === undefined
+      ? headGroups
+      : [
+          ...headGroups,
+          ...Array<string>(8 - headGroups.length - restGroups.length).fill('0'),
+          ...restGroups,
+        ];
+  const hex = groups.map((group) => parseInt(group || '0', 16));
+  if (hex.length !== 8 || hex.some(Number.isNaN)) return address;
+  if (hex.slice(0, 5).every((g) => g === 0) && hex[5] === 0xffff) {
+    return `${hex[6] >> 8}.${hex[6] & 255}.${hex[7] >> 8}.${hex[7] & 255}`;
+  }
+  return `${hex
+    .slice(0, 4)
+    .map((g) => g.toString(16))
+    .join(':')}::/64`;
+}
+
 export interface RateLimitOptions {
   name: LimiterName;
   windowMs: number;

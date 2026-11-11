@@ -184,6 +184,15 @@ describe('RatingsCard', () => {
     expect(screen.getByRole('button', { name: 'Apply ratings' })).toBeDisabled();
   });
 
+  it('stays disabled and says why while counted submissions are still being judged (A-03)', () => {
+    mockFetch({});
+    renderWithProviders(<RatingsCard contest={adminContest({ pendingSubmissions: 3 })} />, {
+      user: adminUser,
+    });
+    expect(screen.getByRole('button', { name: 'Apply ratings' })).toBeDisabled();
+    expect(screen.getByText(/3 submissions are still being judged/)).toBeInTheDocument();
+  });
+
   it('explains a 409 from the server', async () => {
     mockFetch({
       'POST /api/admin/contests/c_1/rate': () =>

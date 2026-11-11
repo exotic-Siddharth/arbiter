@@ -5,7 +5,7 @@ import type { Language } from '@arbiter/shared';
 import { env } from '../config/env';
 import { logger } from '../lib/logger';
 import { WORKER_ID } from './heartbeat';
-import { containerDeadlineMs, type DerivedLimits } from './languages';
+import { READY_TIMEOUT_MS, containerDeadlineMs, type DerivedLimits } from './languages';
 import { sandboxContainerStart } from './metrics';
 import {
   ProtocolError,
@@ -24,7 +24,6 @@ export const PREFIX_LABEL = 'arbiter.prefix';
 export const WORKER_LABEL = 'arbiter.worker';
 export const CONTAINER_NAME_PREFIX = 'arbiter-sbx-';
 
-const READY_TIMEOUT_MS = 60_000;
 const CLOSE_TIMEOUT_MS = 5_000;
 const STDERR_KEEP = 4096;
 
