@@ -91,6 +91,7 @@ describe('POST /api/auth/register', () => {
     });
     expect(res.status).toBe(409);
     expect(ErrorBodySchema.parse(res.body).error.code).toBe('CONFLICT');
+    expect(res.body.error.details).toEqual({ field: 'email' });
   });
 
   it('duplicate username → 409, case-insensitive', async () => {
@@ -102,6 +103,7 @@ describe('POST /api/auth/register', () => {
     });
     expect(res.status).toBe(409);
     expect(ErrorBodySchema.parse(res.body).error.code).toBe('CONFLICT');
+    expect(res.body.error.details).toEqual({ field: 'username' });
   });
 
   it('rejects a short password and a bad username with 400', async () => {

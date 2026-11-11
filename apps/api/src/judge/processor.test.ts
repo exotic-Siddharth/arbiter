@@ -1,4 +1,4 @@
-import type { ScoreRow } from '@arbiter/shared';
+import { ScoreRowSchema } from '@arbiter/shared';
 import type { PrismaClient, User } from '@prisma/client';
 import type { Job } from 'bullmq';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,15 +14,13 @@ import { runKey, type JudgeJobData, type RunJobData, type StoredRun } from './qu
 
 /**
  * Judge processor against real Docker, Postgres and Redis (R20: `npm run test:sandbox`).
- * recomputeRow belongs to lane A3 and is mocked; socket emits are spied on.
+ * recomputeRow is the real implementation (lane A3b, wrapped in a spy to observe the calls);
+ * socket emits are spied on.
  */
-const ROW: ScoreRow = { rank: 1, username: 'x', rating: 1200, solved: 0, penalty: 0, cells: [] };
-
-vi.mock('../modules/contests/scoreboard', () => ({
-  recomputeRow: vi.fn(async () => ROW),
-  rebuildScoreboard: vi.fn(),
-  getScoreboard: vi.fn(),
-}));
+vi.mock('../modules/contests/scoreboard', async (importActual) => {
+  const actual = await importActual<typeof import('../modules/contests/scoreboard')>();
+  return { ...actual, recomputeRow: vi.fn(actual.recomputeRow) };
+});
 
 const ORIGINAL_IMAGE = env.SANDBOX_IMAGE;
 let prisma: PrismaClient;
@@ -189,12 +187,44 @@ describe('processJudgeJob: submissions', () => {
     expect(spies.test).not.toHaveBeenCalled();
     expect(spies.feed).not.toHaveBeenCalled();
     expect(recomputeRow).toHaveBeenCalledWith(contest.id, user.id);
-    expect(spies.scoreboard).toHaveBeenCalledWith(contest.id, {
-      contestSlug: contest.slug,
-      row: ROW,
+    expect(spies.scoreboard).toHaveBeenCalledTimes(1);
+    const [contestId, payload] = spies.scoreboard.mock.calls[0];
+    expect(contestId).toBe(contest.id);
+    expect(payload.contestSlug).toBe(contest.slug);
+    // The real recomputeRow output is schema-valid, and a CE is never a counted attempt.
+    expect(ScoreRowSchema.safeParse(payload.row).success).toBe(true);
+    expect(payload.row).toMatchObject({
+      username: user.username,
+      solved: 0,
+      cells: [{ label: 'A', solved: false, attempts: 0 }],
     });
     const counters = await prisma.problem.findUniqueOrThrow({ where: { id: problem.id } });
     expect(counters).toMatchObject({ submissionCount: 1, acceptedCount: 0 });
+  });
+
+  it('an AC contest submission solves its cell on the real scoreboard (R3)', async () => {
+    const problem = await createProblem(prisma, { isPublished: false });
+    const contest = await createContest(prisma, {
+      problems: [{ problemId: problem.id, label: 'A' }],
+      registrations: [user.id],
+    });
+    const submission = await createSubmission(prisma, {
+      userId: user.id,
+      problemId: problem.id,
+      contestId: contest.id,
+      sourceCode: PY_SUM,
+    });
+    await judge(submission.id);
+
+    const [, payload] = spies.scoreboard.mock.calls[0];
+    expect(ScoreRowSchema.safeParse(payload.row).success).toBe(true);
+    expect(payload.row).toMatchObject({
+      rank: 1,
+      username: user.username,
+      solved: 1,
+      // attempts counts the tries before the first AC (R3): the AC itself is not one.
+      cells: [{ label: 'A', solved: true, attempts: 0, firstSolve: true }],
+    });
   });
 
   it('REFERENCE submissions never touch counters, feeds or scoreboards (R7)', async () => {

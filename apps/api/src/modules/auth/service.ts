@@ -28,9 +28,10 @@ export async function registerUser(prisma: PrismaClient, body: RegisterBody): Pr
     select: { email: true },
   });
   if (existing) {
-    throw conflict(
-      existing.email === email ? 'That email is already registered' : 'That username is taken',
-    );
+    // details.field lets the sign-up form mark the conflicting input (lane A5).
+    throw existing.email === email
+      ? conflict('That email is already registered', { field: 'email' })
+      : conflict('That username is taken', { field: 'username' });
   }
 
   const passwordHash = await hashPassword(body.password);

@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Markdown } from './Markdown';
@@ -48,5 +50,38 @@ describe('Markdown', () => {
     expect(external).toHaveAttribute('target', '_blank');
     expect(external).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByRole('link', { name: 'home' })).not.toHaveAttribute('target');
+  });
+});
+
+describe('Markdown with the real seed statements', () => {
+  // vitest runs with apps/web as the working directory.
+  const root = resolve(process.cwd(), '..', '..', 'seed', 'problems');
+  const statement = (slug: string) => readFileSync(resolve(root, slug, 'problem.md'), 'utf8');
+
+  it('renders the GFM table of nested-scrolls', () => {
+    render(<Markdown source={statement('nested-scrolls')} />);
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      'Case',
+      'Opened',
+      'Closed',
+    ]);
+  });
+
+  it('renders the display math of average-pace with KaTeX', () => {
+    const { container } = render(<Markdown source={statement('average-pace')} />);
+    expect(container.querySelector('.katex-display')).not.toBeNull();
+    expect(container.querySelectorAll('.katex').length).toBeGreaterThan(5);
+    expect(container.textContent).not.toContain('$');
+  });
+
+  it('every seed statement renders without leftover math delimiters or KaTeX errors', () => {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const { container, unmount } = render(<Markdown source={statement(entry.name)} />);
+      expect(container.querySelector('.katex-error'), entry.name).toBeNull();
+      expect(container.textContent, entry.name).not.toContain('$');
+      unmount();
+    }
   });
 });

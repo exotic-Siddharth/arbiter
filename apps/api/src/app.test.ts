@@ -6,6 +6,64 @@ import { createApp } from './app';
 import { signAccessToken } from './lib/jwt';
 import { routeManifest } from './lib/router';
 
+/** The literal route list of spec section 10 (every row of both tables, plus the section 10 health routes). */
+const SPEC_ROUTES = [
+  'POST /api/auth/register',
+  'POST /api/auth/login',
+  'POST /api/auth/refresh',
+  'POST /api/auth/logout',
+  'GET /api/auth/me',
+  'GET /api/users/:username',
+  'PATCH /api/users/me',
+  'GET /api/leaderboard',
+  'GET /api/problems',
+  'GET /api/problems/:slug',
+  'GET /api/tags',
+  'POST /api/submissions',
+  'GET /api/submissions',
+  'GET /api/submissions/:id',
+  'POST /api/runs',
+  'GET /api/runs/:runId',
+  'GET /api/contests',
+  'GET /api/contests/:slug',
+  'POST /api/contests/:slug/register',
+  'GET /api/contests/:slug/problems/:label',
+  'GET /api/contests/:slug/scoreboard',
+  'GET /api/contests/:slug/submissions',
+  'GET /api/stats',
+  'GET /api/admin/problems',
+  'POST /api/admin/problems',
+  'GET /api/admin/problems/:id',
+  'PUT /api/admin/problems/:id',
+  'DELETE /api/admin/problems/:id',
+  'GET /api/admin/problems/:id/tests',
+  'POST /api/admin/problems/:id/tests',
+  'PUT /api/admin/problems/:id/tests/:testId',
+  'DELETE /api/admin/problems/:id/tests/:testId',
+  'POST /api/admin/problems/:id/tests/bulk',
+  'POST /api/admin/problems/:id/validate-reference',
+  'POST /api/admin/problems/:id/generate-outputs',
+  'GET /api/admin/jobs/:id',
+  'GET /api/admin/contests',
+  'POST /api/admin/contests',
+  'GET /api/admin/contests/:id',
+  'PUT /api/admin/contests/:id',
+  'DELETE /api/admin/contests/:id',
+  'POST /api/admin/contests/:id/rate',
+  'POST /api/admin/plagiarism',
+  'GET /api/admin/plagiarism',
+  'GET /api/admin/plagiarism/:id',
+  'GET /api/admin/judge',
+  'GET /api/admin/users',
+  'PATCH /api/admin/users/:id',
+  'GET /healthz',
+  'GET /readyz',
+  'GET /metrics',
+];
+
+/** Routes the build added beyond section 10 (see the Decisions log). */
+const EXTRA_ROUTES = ['POST /api/auth/demo', 'GET /api/admin/problems/:id/tests/:testId'];
+
 const app = createApp();
 
 const userToken = signAccessToken({ id: 'user-1', username: 'alice', role: 'USER' });
@@ -143,5 +201,18 @@ describe('createApp', () => {
     }
     const unique = new Set(routeManifest.map((r) => `${r.method} ${r.fullPath}`));
     expect(unique.size).toBe(routeManifest.length);
+  });
+
+  it('the registered routes are exactly the spec section 10 list plus the documented extras', async () => {
+    const registered = routeManifest.map((r) => `${r.method.toUpperCase()} ${r.fullPath}`).sort();
+    expect(registered).toEqual([...SPEC_ROUTES, ...EXTRA_ROUTES].sort());
+    // Every API route is also an operation in the served OpenAPI document (health and metrics are not).
+    const res = await request(app).get('/api/openapi.json');
+    const paths = res.body.paths as Record<string, Record<string, unknown>>;
+    for (const entry of registered.filter((r) => r.includes(' /api/'))) {
+      const [method, path] = entry.split(' ');
+      const openApiPath = path.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+      expect(paths[openApiPath]?.[method.toLowerCase()], entry).toBeDefined();
+    }
   });
 });
