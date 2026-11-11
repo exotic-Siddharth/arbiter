@@ -20,5 +20,7 @@ export default defineConfig({
     unstubGlobals: true,
     // CSS imports (Tailwind, KaTeX) are irrelevant in jsdom.
     css: false,
+    // Router tests import every lazy page cold (Monaco, recharts); allow for a loaded laptop.
+    testTimeout: 20_000,
   },
 });
