@@ -5,9 +5,13 @@ import {
   JudgeStatusSchema,
   ValidateReferenceResponseSchema,
 } from '@arbiter/shared';
-import { createRouter, notImplemented } from '../../lib/router';
+import { getAdminJob, startGenerateOutputs, validateReference } from '../../judge/admin';
+import { getJudgeStatus } from '../../judge/monitor';
+import { getDeps } from '../../lib/deps';
+import { unauthorized } from '../../lib/errors';
+import { createRouter } from '../../lib/router';
 
-// Owner: lane A2. Mounted FIRST at /api/admin (R10). Scaffold stub: replace `notImplemented`.
+// Owner: lane A2. Mounted FIRST at /api/admin (R10).
 const { router, route } = createRouter('/api/admin');
 export { router };
 
@@ -26,7 +30,10 @@ route(
       409: 'The problem has no reference solution',
     },
   },
-  notImplemented,
+  async (req, res) => {
+    if (!req.user) throw unauthorized();
+    res.status(202).json(await validateReference(getDeps(req).prisma, req.params.id, req.user.id));
+  },
 );
 
 route(
@@ -43,7 +50,9 @@ route(
       409: 'The problem has no reference solution',
     },
   },
-  notImplemented,
+  async (req, res) => {
+    res.status(202).json(await startGenerateOutputs(getDeps(req).prisma, req.params.id));
+  },
 );
 
 route(
@@ -56,7 +65,9 @@ route(
     request: { params: IdParams },
     responses: { 200: AdminJobSchema, 404: 'Job not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await getAdminJob(getDeps(req).prisma, req.params.id));
+  },
 );
 
 route(
@@ -68,5 +79,8 @@ route(
     auth: 'admin',
     responses: { 200: JudgeStatusSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    const { prisma, redis } = getDeps(req);
+    res.json(await getJudgeStatus({ prisma, redis }));
+  },
 );

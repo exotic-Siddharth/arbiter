@@ -7,7 +7,11 @@ export interface SeparatorProps {
   className?: string;
 }
 
-export function Separator({ orientation = 'horizontal', decorative = true, className }: SeparatorProps) {
+export function Separator({
+  orientation = 'horizontal',
+  decorative = true,
+  className,
+}: SeparatorProps) {
   return (
     <div
       role={decorative ? 'none' : 'separator'}

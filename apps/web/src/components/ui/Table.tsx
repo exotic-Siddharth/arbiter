@@ -50,7 +50,11 @@ export function Tr({ interactive = false, selected = false, className, ...props 
 }
 
 type Align = 'left' | 'center' | 'right';
-const ALIGN: Record<Align, string> = { left: 'text-left', center: 'text-center', right: 'text-right' };
+const ALIGN: Record<Align, string> = {
+  left: 'text-left',
+  center: 'text-center',
+  right: 'text-right',
+};
 
 export interface ThProps extends ComponentProps<'th'> {
   align?: Align;
@@ -141,7 +145,12 @@ export interface TableSkeletonProps {
 }
 
 /** Loading placeholder shaped like a table. */
-export function TableSkeleton({ rows = 6, columns = 4, header = true, className }: TableSkeletonProps) {
+export function TableSkeleton({
+  rows = 6,
+  columns = 4,
+  header = true,
+  className,
+}: TableSkeletonProps) {
   return (
     <div role="status" aria-label="Loading" className={cn('w-full', className)}>
       {header ? (
@@ -152,11 +161,17 @@ export function TableSkeleton({ rows = 6, columns = 4, header = true, className 
         </div>
       ) : null}
       {Array.from({ length: rows }, (_, row) => (
-        <div key={row} className="flex h-12 items-center gap-6 border-b border-border px-5 last:border-b-0">
+        <div
+          key={row}
+          className="flex h-12 items-center gap-6 border-b border-border px-5 last:border-b-0"
+        >
           {Array.from({ length: columns }, (_, column) => (
             <Skeleton
               key={column}
-              className={cn('h-3.5', column === 0 ? 'w-1/3' : column === columns - 1 ? 'ml-auto w-12' : 'w-20')}
+              className={cn(
+                'h-3.5',
+                column === 0 ? 'w-1/3' : column === columns - 1 ? 'ml-auto w-12' : 'w-20',
+              )}
             />
           ))}
         </div>

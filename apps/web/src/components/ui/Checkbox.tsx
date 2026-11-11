@@ -39,7 +39,10 @@ export function Checkbox({
     <div className={cn('flex items-start gap-2.5', disabled && 'opacity-60', containerClassName)}>
       {input}
       <div className="min-w-0">
-        <label htmlFor={inputId} className={cn('text-sm text-foreground', !disabled && 'cursor-pointer')}>
+        <label
+          htmlFor={inputId}
+          className={cn('text-sm text-foreground', !disabled && 'cursor-pointer')}
+        >
           {label}
         </label>
         {description ? (

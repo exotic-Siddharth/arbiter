@@ -52,7 +52,10 @@ describe('Tabs', () => {
 
     await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: 'My submissions' })).toHaveFocus();
-    expect(screen.getByRole('tab', { name: 'My submissions' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'My submissions' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     expect(screen.getByRole('tabpanel')).toHaveTextContent('Submissions table');
 
     await user.keyboard('{ArrowRight}');

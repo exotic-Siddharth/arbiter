@@ -6,7 +6,9 @@ import { useDocumentTitle } from '@/lib/useDocumentTitle';
 
 function isChunkLoadError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /dynamically imported module|Importing a module script failed|Failed to fetch/i.test(message);
+  return /dynamically imported module|Importing a module script failed|Failed to fetch/i.test(
+    message,
+  );
 }
 
 /** Route errorElement: 404s, failed lazy chunks (new deploy) and unexpected render errors. */

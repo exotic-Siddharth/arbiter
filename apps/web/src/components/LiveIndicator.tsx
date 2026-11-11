@@ -10,7 +10,8 @@ export interface LiveIndicatorProps {
 /** Realtime connection status: pulsing green "Live", amber "Reconnecting…", grey "Offline". */
 export function LiveIndicator({ label = 'Live', className }: LiveIndicatorProps) {
   const status = useSocketStatus();
-  const text = status === 'connected' ? label : status === 'connecting' ? 'Reconnecting…' : 'Offline';
+  const text =
+    status === 'connected' ? label : status === 'connecting' ? 'Reconnecting…' : 'Offline';
   const color =
     status === 'connected'
       ? 'var(--color-success)'

@@ -1,10 +1,49 @@
-import { AuthResponseSchema, LoginBody, MeResponseSchema, RegisterBody } from '@arbiter/shared';
+import {
+  AuthResponseSchema,
+  LoginBody,
+  MeResponseSchema,
+  RegisterBody,
+  type AuthResponse,
+} from '@arbiter/shared';
+import type { PrismaClient, User } from '@prisma/client';
+import type { Request, Response } from 'express';
+import { env } from '../../config/env';
+import { getDeps } from '../../lib/deps';
+import { notFound, unauthorized } from '../../lib/errors';
+import { signAccessToken } from '../../lib/jwt';
 import { RATE_LIMITS, rateLimit } from '../../lib/rateLimit';
-import { createRouter, notImplemented } from '../../lib/router';
+import { createRouter } from '../../lib/router';
+import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './cookie';
+import { authenticate, registerUser, toMe } from './service';
+import { issueRefreshToken, revokeByToken, rotateRefreshToken, type TokenMeta } from './tokens';
 
-// Owner: lane A1. Scaffold stub: replace `notImplemented` with the real handlers (keep the defs).
 const { router, route } = createRouter('/api/auth');
 export { router };
+
+const tokenMeta = (req: Request): TokenMeta => ({ userAgent: req.get('user-agent'), ip: req.ip });
+
+/** Auth responses carry credentials: never cacheable. */
+function noStore(res: Response): void {
+  res.setHeader('Cache-Control', 'no-store');
+}
+
+/** Starts a session: new token family, arb_rt cookie, `{user, accessToken}` body. */
+async function startSession(
+  req: Request,
+  res: Response,
+  prisma: PrismaClient,
+  user: User,
+  status: number,
+): Promise<void> {
+  const { token } = await issueRefreshToken(prisma, user.id, tokenMeta(req));
+  setRefreshCookie(res, token);
+  noStore(res);
+  const body: AuthResponse = {
+    user: toMe(user),
+    accessToken: signAccessToken({ id: user.id, username: user.username, role: user.role }),
+  };
+  res.status(status).json(body);
+}
 
 const registerLimiter = rateLimit({
   name: 'register',
@@ -44,7 +83,11 @@ route(
     },
   },
   registerLimiter,
-  notImplemented,
+  async (req, res) => {
+    const { prisma } = getDeps(req);
+    const user = await registerUser(prisma, req.body);
+    await startSession(req, res, prisma, user, 201);
+  },
 );
 
 route(
@@ -61,7 +104,11 @@ route(
     },
   },
   loginLimiter,
-  notImplemented,
+  async (req, res) => {
+    const { prisma } = getDeps(req);
+    const user = await authenticate(prisma, req.body);
+    await startSession(req, res, prisma, user, 200);
+  },
 );
 
 route(
@@ -80,7 +127,13 @@ route(
     },
   },
   demoLimiter,
-  notImplemented,
+  async (req, res) => {
+    if (!env.DEMO_LOGIN_ENABLED) throw notFound('Demo login is disabled');
+    const { prisma } = getDeps(req);
+    const user = await prisma.user.findUnique({ where: { usernameLower: 'demo' } });
+    if (!user) throw notFound('The demo user does not exist');
+    await startSession(req, res, prisma, user, 200);
+  },
 );
 
 route(
@@ -97,7 +150,21 @@ route(
       401: 'Missing, expired, revoked or reused refresh token',
     },
   },
-  notImplemented,
+  async (req, res) => {
+    const token = readRefreshCookie(req);
+    if (!token) throw unauthorized('Missing refresh token');
+    const { prisma } = getDeps(req);
+    try {
+      const session = await rotateRefreshToken(prisma, token, tokenMeta(req));
+      setRefreshCookie(res, session.refreshToken);
+      noStore(res);
+      const body: AuthResponse = { user: toMe(session.user), accessToken: session.accessToken };
+      res.json(body);
+    } catch (error) {
+      clearRefreshCookie(res);
+      throw error;
+    }
+  },
 );
 
 route(
@@ -109,7 +176,13 @@ route(
     auth: 'cookie',
     responses: { 204: null },
   },
-  notImplemented,
+  async (req, res) => {
+    const token = readRefreshCookie(req);
+    if (token) await revokeByToken(getDeps(req).prisma, token);
+    clearRefreshCookie(res);
+    noStore(res);
+    res.status(204).end();
+  },
 );
 
 route(
@@ -121,5 +194,10 @@ route(
     auth: 'user',
     responses: { 200: MeResponseSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    const user = await getDeps(req).prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) throw unauthorized('Account no longer exists');
+    noStore(res);
+    res.json({ user: toMe(user) });
+  },
 );

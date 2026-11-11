@@ -81,7 +81,12 @@ export function Navbar() {
             aria-expanded={menuOpen}
             aria-controls={menuId}
             onClick={() => setMenuOpen((open) => !open)}
-            className={buttonStyles({ variant: 'ghost', size: 'sm', iconOnly: true, className: 'md:hidden' })}
+            className={buttonStyles({
+              variant: 'ghost',
+              size: 'sm',
+              iconOnly: true,
+              className: 'md:hidden',
+            })}
           >
             {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
           </button>
@@ -89,10 +94,20 @@ export function Navbar() {
       </div>
 
       {menuOpen ? (
-        <div id={menuId} className="border-t border-border bg-background md:hidden animate-slide-down">
-          <nav aria-label="Main" className="mx-auto flex max-w-7xl flex-col gap-1 px-4 py-3 sm:px-6">
+        <div
+          id={menuId}
+          className="border-t border-border bg-background md:hidden animate-slide-down"
+        >
+          <nav
+            aria-label="Main"
+            className="mx-auto flex max-w-7xl flex-col gap-1 px-4 py-3 sm:px-6"
+          >
             {MAIN_NAV.map((item) => (
-              <NavLink key={item.to} to={item.to} className={({ isActive }) => cn(navLinkClass({ isActive }), 'py-2')}>
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => cn(navLinkClass({ isActive }), 'py-2')}
+              >
                 {item.label}
               </NavLink>
             ))}

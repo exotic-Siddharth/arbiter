@@ -20,7 +20,10 @@ export function Footer() {
     <footer className="mt-auto border-t border-border bg-surface/40">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] lg:px-8">
         <div className="max-w-sm space-y-3">
-          <Link to="/" className="inline-flex items-center gap-2 rounded-control font-semibold tracking-tight">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 rounded-control font-semibold tracking-tight"
+          >
             <Logo className="size-6" />
             Arbiter
           </Link>

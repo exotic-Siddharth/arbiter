@@ -16,7 +16,14 @@ export interface EmptyStateProps {
 }
 
 /** "Nothing here yet" state for lists, tables and panels. */
-export function EmptyState({ icon, title, description, action, compact = false, className }: EmptyStateProps) {
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+  compact = false,
+  className,
+}: EmptyStateProps) {
   return (
     <div
       className={cn(
@@ -38,7 +45,9 @@ export function EmptyState({ icon, title, description, action, compact = false, 
       ) : null}
       <h3 className="text-[15px] font-semibold text-foreground">{title}</h3>
       {description ? <p className="max-w-md text-sm text-muted">{description}</p> : null}
-      {action ? <div className="mt-2 flex flex-wrap items-center justify-center gap-2">{action}</div> : null}
+      {action ? (
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-2">{action}</div>
+      ) : null}
     </div>
   );
 }
@@ -81,7 +90,8 @@ export function ErrorState({
         {offline ? <WifiOff /> : <CircleAlert />}
       </div>
       <h3 className="text-[15px] font-semibold text-foreground">
-        {title ?? (offline ? "Can't reach the server" : notFound ? 'Not found' : "Couldn't load this")}
+        {title ??
+          (offline ? "Can't reach the server" : notFound ? 'Not found' : "Couldn't load this")}
       </h3>
       <p className="max-w-md text-sm text-muted">
         {getErrorMessage(error, 'Something went wrong while loading. Please try again.')}

@@ -99,7 +99,10 @@ export function Component() {
   const in90Minutes = new Date(Date.now() + 90 * 60_000).toISOString();
 
   return (
-    <Page title="UI kit" description="Every shared component in the current theme (development only).">
+    <Page
+      title="UI kit"
+      description="Every shared component in the current theme (development only)."
+    >
       <div className="grid gap-6 lg:grid-cols-2">
         <KitSection title="Buttons">
           <div className="flex flex-wrap items-center gap-2">
@@ -167,7 +170,11 @@ export function Component() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Username" placeholder="ada_lovelace" hint="3–20 letters, digits or _." />
             <Input label="Email" defaultValue="ada@" error="Enter a valid email" />
-            <Input aria-label="Search problems" placeholder="Search problems…" leftIcon={<Search />} />
+            <Input
+              aria-label="Search problems"
+              placeholder="Search problems…"
+              leftIcon={<Search />}
+            />
             <Select
               label="Language"
               value={language}
@@ -176,14 +183,26 @@ export function Component() {
                 setLanguage(next);
                 setCode(LANGUAGES[next].template);
               }}
-              options={Object.values(LANGUAGES).map((info) => ({ value: info.id, label: info.label }))}
+              options={Object.values(LANGUAGES).map((info) => ({
+                value: info.id,
+                label: info.label,
+              }))}
             />
             <Input label="Disabled" disabled defaultValue="read only" />
-            <Select label="Difficulty" placeholder="All difficulties" options={[{ value: 'EASY', label: 'Easy' }]} />
+            <Select
+              label="Difficulty"
+              placeholder="All difficulties"
+              options={[{ value: 'EASY', label: 'Easy' }]}
+            />
           </div>
           <Textarea label="Custom input" mono defaultValue={'5\n1 2 3 4 5'} />
           <div className="flex flex-wrap items-start gap-6">
-            <Switch checked={published} onCheckedChange={setPublished} label="Published" description="Visible in /problems." />
+            <Switch
+              checked={published}
+              onCheckedChange={setPublished}
+              label="Published"
+              description="Visible in /problems."
+            />
             <Checkbox label="Replace existing tests" description="Delete current tests first." />
           </div>
         </KitSection>
@@ -195,7 +214,13 @@ export function Component() {
           <Alert tone="info" title="Contest starts soon">
             Registration stays open until the contest ends.
           </Alert>
-          <ProgressBar label="Tests passed" value={7} max={12} showLabel color="var(--color-verdict-ac)" />
+          <ProgressBar
+            label="Tests passed"
+            value={7}
+            max={12}
+            showLabel
+            color="var(--color-verdict-ac)"
+          />
           <ProgressBar label="Generating outputs" />
           <div className="flex items-center gap-4">
             <Spinner label="Loading" />
@@ -214,7 +239,9 @@ export function Component() {
             <Button
               variant="secondary"
               onClick={() =>
-                toast.error('Slow down', { description: 'Too many submissions. Try again in 37 s.' })
+                toast.error('Slow down', {
+                  description: 'Too many submissions. Try again in 37 s.',
+                })
               }
             >
               Error toast
@@ -239,7 +266,12 @@ export function Component() {
 
         <KitSection title="Stats and tabs">
           <div className="grid gap-3 sm:grid-cols-3">
-            <Stat label="Problems" value="15" icon={<BookOpen />} hint="5 easy · 6 medium · 4 hard" />
+            <Stat
+              label="Problems"
+              value="15"
+              icon={<BookOpen />}
+              hint="5 easy · 6 medium · 4 hard"
+            />
             <Stat label="Judged today" value="1,284" icon={<Trophy />} />
             <Stat label="Loading" value="0" loading />
           </div>
@@ -273,11 +305,21 @@ export function Component() {
             icon={<Inbox />}
             title="No submissions yet"
             description="Submit a solution and it will show up here."
-            action={<Button size="sm" leftIcon={<Plus />}>New submission</Button>}
+            action={
+              <Button size="sm" leftIcon={<Plus />}>
+                New submission
+              </Button>
+            }
           />
           <ErrorState
             compact
-            error={new ApiError({ status: 503, code: 'INTERNAL', message: 'The server is unavailable right now.' })}
+            error={
+              new ApiError({
+                status: 503,
+                code: 'INTERNAL',
+                message: 'The server is unavailable right now.',
+              })
+            }
             onRetry={() => toast('Retrying')}
           />
           <SkeletonText lines={3} />
@@ -286,7 +328,11 @@ export function Component() {
       </div>
 
       <Card>
-        <CardHeader title="Table" description="Sortable header, numeric cells, pagination." divider />
+        <CardHeader
+          title="Table"
+          description="Sortable header, numeric cells, pagination."
+          divider
+        />
         <Table>
           <THead>
             <Tr>
@@ -312,7 +358,13 @@ export function Component() {
           </TBody>
         </Table>
         <div className="border-t border-border px-5 py-3">
-          <Pagination page={page} pageSize={20} total={312} onPageChange={setPage} itemLabel="problems" />
+          <Pagination
+            page={page}
+            pageSize={20}
+            total={312}
+            onPageChange={setPage}
+            itemLabel="problems"
+          />
         </div>
       </Card>
 

@@ -60,7 +60,13 @@ export function CopyButton({
   return (
     <>
       {children ? (
-        <Button variant={variant} size={size} leftIcon={icon} onClick={onCopy} className={className}>
+        <Button
+          variant={variant}
+          size={size}
+          leftIcon={icon}
+          onClick={onCopy}
+          className={className}
+        >
           {copied ? 'Copied' : children}
         </Button>
       ) : (

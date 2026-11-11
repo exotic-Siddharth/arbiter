@@ -1,0 +1,11 @@
+{
+  "slug": "average-pace",
+  "title": "Average Pace",
+  "difficulty": "EASY",
+  "tags": ["math", "implementation"],
+  "timeLimitMs": 1000,
+  "memoryLimitMb": 256,
+  "checker": "FLOAT",
+  "floatTolerance": 1e-6,
+  "samples": [1, 2]
+}

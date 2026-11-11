@@ -72,7 +72,11 @@ export function DropdownMenu({
   const [initialItem, setInitialItem] = useState<'first' | 'last'>('first');
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { style } = useFloatingPosition(open, triggerRef, menuRef, { side: 'bottom', align, offset: 6 });
+  const { style } = useFloatingPosition(open, triggerRef, menuRef, {
+    side: 'bottom',
+    align,
+    offset: 6,
+  });
 
   const close = useCallback((restoreFocus = true) => {
     setOpen(false);
@@ -187,7 +191,14 @@ export interface MenuItemProps {
 }
 
 /** A menu action (closes the menu, then calls onSelect). */
-export function MenuItem({ onSelect, icon, tone = 'default', disabled = false, hint, children }: MenuItemProps) {
+export function MenuItem({
+  onSelect,
+  icon,
+  tone = 'default',
+  disabled = false,
+  hint,
+  children,
+}: MenuItemProps) {
   const { close } = useMenu();
   return (
     <button
@@ -202,7 +213,9 @@ export function MenuItem({ onSelect, icon, tone = 'default', disabled = false, h
       }}
       className={cn(ITEM_CLASS, tone === 'danger' ? 'text-danger' : 'text-foreground')}
     >
-      {icon ? <span className={tone === 'danger' ? 'text-danger' : 'text-muted'}>{icon}</span> : null}
+      {icon ? (
+        <span className={tone === 'danger' ? 'text-danger' : 'text-muted'}>{icon}</span>
+      ) : null}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {hint ? <span className="ml-4 text-xs text-muted">{hint}</span> : null}
     </button>
@@ -219,7 +232,13 @@ export interface MenuLinkProps {
 export function MenuLink({ to, icon, children }: MenuLinkProps) {
   const { close } = useMenu();
   return (
-    <Link to={to} role="menuitem" tabIndex={-1} onClick={() => close(false)} className={cn(ITEM_CLASS, 'text-foreground')}>
+    <Link
+      to={to}
+      role="menuitem"
+      tabIndex={-1}
+      onClick={() => close(false)}
+      className={cn(ITEM_CLASS, 'text-foreground')}
+    >
       {icon ? <span className="text-muted">{icon}</span> : null}
       <span className="min-w-0 flex-1 truncate">{children}</span>
     </Link>

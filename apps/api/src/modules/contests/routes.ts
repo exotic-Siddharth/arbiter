@@ -10,9 +10,19 @@ import {
   SlugParams,
   SubmissionPageSchema,
 } from '@arbiter/shared';
-import { createRouter, notImplemented } from '../../lib/router';
+import { getDeps } from '../../lib/deps';
+import { createRouter } from '../../lib/router';
+import { getScoreboard } from './scoreboard';
+import {
+  findVisibleContest,
+  getContestDetail,
+  getContestProblem,
+  listContestSubmissions,
+  listContests,
+  registerForContest,
+} from './service';
 
-// Owner: lane A3. Scaffold stub: replace `notImplemented` with the real handlers (keep the defs).
+// Owner: lane A3b. Public contest routes (spec sections 9 and 10).
 const { router, route } = createRouter('/api/contests');
 export { router };
 
@@ -26,7 +36,9 @@ route(
     request: { query: ListContestsQuery },
     responses: { 200: ContestListSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await listContests(getDeps(req).prisma, req.validatedQuery.status, req.user));
+  },
 );
 
 route(
@@ -39,7 +51,9 @@ route(
     request: { params: SlugParams },
     responses: { 200: ContestDetailSchema, 404: 'Contest not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await getContestDetail(getDeps(req).prisma, req.params.slug, req.user));
+  },
 );
 
 route(
@@ -57,7 +71,10 @@ route(
       409: 'Already registered',
     },
   },
-  notImplemented,
+  async (req, res) => {
+    await registerForContest(getDeps(req).prisma, req.params.slug, req.user!);
+    res.status(204).end();
+  },
 );
 
 route(
@@ -70,7 +87,10 @@ route(
     request: { params: ContestProblemParams },
     responses: { 200: ProblemDetailSchema, 404: 'Contest or problem not found (or not started)' },
   },
-  notImplemented,
+  async (req, res) => {
+    const { slug, label } = req.params;
+    res.json(await getContestProblem(getDeps(req).prisma, slug, label, req.user));
+  },
 );
 
 route(
@@ -83,7 +103,11 @@ route(
     request: { params: SlugParams, query: ScoreboardQuery },
     responses: { 200: ScoreboardSchema, 404: 'Contest not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    const contest = await findVisibleContest(getDeps(req).prisma, req.params.slug, req.user);
+    const { page, pageSize } = req.validatedQuery;
+    res.json(await getScoreboard(contest.id, page, pageSize));
+  },
 );
 
 route(
@@ -96,5 +120,14 @@ route(
     request: { params: SlugParams, query: ContestSubmissionsQuery },
     responses: { 200: SubmissionPageSchema, 404: 'Contest not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(
+      await listContestSubmissions(
+        getDeps(req).prisma,
+        req.params.slug,
+        req.validatedQuery,
+        req.user!,
+      ),
+    );
+  },
 );

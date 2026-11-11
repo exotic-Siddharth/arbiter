@@ -64,7 +64,10 @@ export function CardHeader({
 export function CardTitle({ className, ...props }: ComponentProps<'h2'>) {
   return (
     <h2
-      className={cn('text-[15px] font-semibold leading-snug tracking-tight text-foreground', className)}
+      className={cn(
+        'text-[15px] font-semibold leading-snug tracking-tight text-foreground',
+        className,
+      )}
       {...props}
     />
   );
@@ -81,7 +84,10 @@ export function CardContent({ className, ...props }: ComponentProps<'div'>) {
 export function CardFooter({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
-      className={cn('flex items-center justify-end gap-2 border-t border-border px-5 py-3', className)}
+      className={cn(
+        'flex items-center justify-end gap-2 border-t border-border px-5 py-3',
+        className,
+      )}
       {...props}
     />
   );

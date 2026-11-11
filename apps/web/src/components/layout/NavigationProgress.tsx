@@ -18,7 +18,11 @@ export function NavigationProgress() {
 
   if (!visible) return null;
   return (
-    <div role="progressbar" aria-label="Loading page" className="fixed inset-x-0 top-0 z-[70] h-0.5">
+    <div
+      role="progressbar"
+      aria-label="Loading page"
+      className="fixed inset-x-0 top-0 z-[70] h-0.5"
+    >
       <div className="h-full origin-left animate-nav-progress bg-primary shadow-[0_0_8px_var(--color-primary)]" />
     </div>
   );

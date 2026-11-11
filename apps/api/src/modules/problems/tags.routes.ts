@@ -1,7 +1,9 @@
 import { TagListSchema } from '@arbiter/shared';
-import { createRouter, notImplemented } from '../../lib/router';
+import { getDeps } from '../../lib/deps';
+import { createRouter } from '../../lib/router';
+import { listTags } from './service';
 
-// Owner: lane A3. Scaffold stub: replace `notImplemented` with the real handler (keep the def).
+// Owner: lane A3a.
 const { router, route } = createRouter('/api/tags');
 export { router };
 
@@ -13,5 +15,7 @@ route(
     tags: ['Problems'],
     responses: { 200: TagListSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await listTags(getDeps(req).prisma));
+  },
 );

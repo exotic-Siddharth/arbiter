@@ -68,7 +68,9 @@ export function Countdown({
       aria-label={`${describeDuration(safe)} ${label}`}
       className={cn('font-mono tabular-nums', className)}
     >
-      {format === 'compact' ? formatDuration(Math.ceil(safe / 60_000) * 60_000) : formatCountdown(Math.ceil(safe / 1000) * 1000)}
+      {format === 'compact'
+        ? formatDuration(Math.ceil(safe / 60_000) * 60_000)
+        : formatCountdown(Math.ceil(safe / 1000) * 1000)}
     </span>
   );
 }

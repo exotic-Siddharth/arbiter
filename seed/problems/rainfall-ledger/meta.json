@@ -1,0 +1,10 @@
+{
+  "slug": "rainfall-ledger",
+  "title": "Rainfall Ledger",
+  "difficulty": "EASY",
+  "tags": ["prefix-sums"],
+  "timeLimitMs": 1000,
+  "memoryLimitMb": 256,
+  "checker": "TOKENS",
+  "samples": [1, 2]
+}

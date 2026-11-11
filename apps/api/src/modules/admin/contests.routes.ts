@@ -6,9 +6,18 @@ import {
   IdParams,
   RateContestResponseSchema,
 } from '@arbiter/shared';
-import { createRouter, notImplemented } from '../../lib/router';
+import { getDeps } from '../../lib/deps';
+import { createRouter } from '../../lib/router';
+import {
+  createAdminContest,
+  deleteAdminContest,
+  getAdminContest,
+  listAdminContests,
+  rateContest,
+  updateAdminContest,
+} from '../contests/admin';
 
-// Owner: lane A3. Scaffold stub: replace `notImplemented` with the real handlers (keep the defs).
+// Owner: lane A3b. Mounted at /api/admin/contests behind requireRole('ADMIN') (R10).
 const { router, route } = createRouter('/api/admin/contests');
 export { router };
 
@@ -22,7 +31,9 @@ route(
     request: { query: AdminContestListQuery },
     responses: { 200: AdminContestPageSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await listAdminContests(getDeps(req).prisma, req.validatedQuery));
+  },
 );
 
 route(
@@ -35,7 +46,9 @@ route(
     request: { body: AdminContestBody },
     responses: { 201: AdminContestSchema, 409: 'Slug already taken' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.status(201).json(await createAdminContest(getDeps(req).prisma, req.body));
+  },
 );
 
 route(
@@ -48,7 +61,9 @@ route(
     request: { params: IdParams },
     responses: { 200: AdminContestSchema, 404: 'Contest not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await getAdminContest(getDeps(req).prisma, req.params.id));
+  },
 );
 
 route(
@@ -61,7 +76,9 @@ route(
     request: { params: IdParams, body: AdminContestBody },
     responses: { 200: AdminContestSchema, 404: 'Contest not found', 409: 'Slug already taken' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await updateAdminContest(getDeps(req).prisma, req.params.id, req.body));
+  },
 );
 
 route(
@@ -74,7 +91,10 @@ route(
     request: { params: IdParams },
     responses: { 204: null, 404: 'Contest not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    await deleteAdminContest(getDeps(req).prisma, req.params.id);
+    res.status(204).end();
+  },
 );
 
 route(
@@ -91,5 +111,7 @@ route(
       409: 'The contest has not ended or is already rated',
     },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await rateContest(getDeps(req).prisma, req.params.id));
+  },
 );

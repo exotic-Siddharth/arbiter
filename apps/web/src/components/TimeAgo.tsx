@@ -12,7 +12,11 @@ export interface TimeAgoProps {
 export function TimeAgo({ date, className }: TimeAgoProps) {
   const now = useNow(30_000);
   return (
-    <time dateTime={date} title={formatDateTime(date)} className={cn('whitespace-nowrap', className)}>
+    <time
+      dateTime={date}
+      title={formatDateTime(date)}
+      className={cn('whitespace-nowrap', className)}
+    >
       {formatRelativeTime(date, now)}
     </time>
   );

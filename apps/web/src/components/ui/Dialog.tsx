@@ -121,8 +121,7 @@ export function Dialog({
     lockScroll();
 
     const panel = panelRef.current;
-    const target =
-      initialFocusRef?.current ?? (panel ? focusableIn(panel)[0] : undefined) ?? panel;
+    const target = initialFocusRef?.current ?? (panel ? focusableIn(panel)[0] : undefined) ?? panel;
     target?.focus();
 
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -145,7 +144,7 @@ export function Dialog({
   if (!open) return null;
 
   const hasBody = children !== undefined && children !== null && children !== false;
-  const trapTab =(event: KeyboardEvent<HTMLDivElement>) => {
+  const trapTab = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Tab' || !panelRef.current) return;
     const items = focusableIn(panelRef.current);
     if (items.length === 0) {
@@ -189,11 +188,7 @@ export function Dialog({
         )}
       >
         <div
-          className={cn(
-            'px-5 pt-5',
-            hasBody ? 'pb-1' : 'pb-5',
-            hideCloseButton ? null : 'pr-12',
-          )}
+          className={cn('px-5 pt-5', hasBody ? 'pb-1' : 'pb-5', hideCloseButton ? null : 'pr-12')}
         >
           <h2 id={titleId} className="text-base font-semibold leading-snug tracking-tight">
             {title}
@@ -288,7 +283,11 @@ export function ConfirmDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
             {cancelLabel}
           </Button>
-          <Button variant={tone === 'danger' ? 'danger' : 'primary'} loading={busy} onClick={confirm}>
+          <Button
+            variant={tone === 'danger' ? 'danger' : 'primary'}
+            loading={busy}
+            onClick={confirm}
+          >
             {confirmLabel}
           </Button>
         </>

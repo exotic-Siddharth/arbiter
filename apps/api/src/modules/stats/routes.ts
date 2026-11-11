@@ -1,7 +1,8 @@
 import { StatsSchema } from '@arbiter/shared';
-import { createRouter, notImplemented } from '../../lib/router';
+import { getDeps } from '../../lib/deps';
+import { createRouter } from '../../lib/router';
+import { getSiteStats } from './service';
 
-// Owner: lane A1. Scaffold stub: replace `notImplemented` with the real handler (keep the def).
 const { router, route } = createRouter('/api/stats');
 export { router };
 
@@ -13,5 +14,7 @@ route(
     tags: ['Stats'],
     responses: { 200: StatsSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await getSiteStats(getDeps(req).prisma));
+  },
 );

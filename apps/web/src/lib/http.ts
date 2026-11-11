@@ -194,7 +194,11 @@ export async function toApiError(response: Response): Promise<ApiError> {
   }
   const error = (body as { error?: unknown } | undefined)?.error;
   if (typeof error === 'object' && error !== null) {
-    const { code, message, details } = error as { code?: unknown; message?: unknown; details?: unknown };
+    const { code, message, details } = error as {
+      code?: unknown;
+      message?: unknown;
+      details?: unknown;
+    };
     if (typeof code === 'string' && typeof message === 'string') {
       return new ApiError({
         status: response.status,
@@ -234,7 +238,11 @@ export async function parseResponse<T>(response: Response, schema?: ResponseSche
   const parsed = schema.safeParse(data);
   if (!parsed.success) {
     if (import.meta.env.DEV) {
-      console.error('[api] response does not match the shared schema', response.url, parsed.error.issues);
+      console.error(
+        '[api] response does not match the shared schema',
+        response.url,
+        parsed.error.issues,
+      );
     }
     throw new ApiError({
       status: response.status,

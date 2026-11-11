@@ -29,3 +29,9 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Hidden tests (~93 MB) are regenerated deterministically: python scripts/gen-tests.py --all
+# Samples 01-02 stay committed; seed/problems/CHECKSUMS.sha256 pins every generated file.
+seed/problems/*/tests/*
+!seed/problems/*/tests/01.*
+!seed/problems/*/tests/02.*

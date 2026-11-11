@@ -4,10 +4,13 @@ import {
   RunIdParams,
   RunStatusResponseSchema,
 } from '@arbiter/shared';
+import { getDeps } from '../../lib/deps';
+import { unauthorized } from '../../lib/errors';
 import { RATE_LIMITS, rateLimit } from '../../lib/rateLimit';
-import { createRouter, notImplemented } from '../../lib/router';
+import { createRouter } from '../../lib/router';
+import { createRun, getRun } from './service';
 
-// Owner: lane A2. Scaffold stub: replace `notImplemented` with the real handlers (keep the defs).
+// Owner: lane A2.
 const { router, route } = createRouter('/api/runs');
 export { router };
 
@@ -35,7 +38,10 @@ route(
     },
   },
   runLimiter,
-  notImplemented,
+  async (req, res) => {
+    if (!req.user) throw unauthorized();
+    res.status(202).json(await createRun(getDeps(req).prisma, req.body, req.user));
+  },
 );
 
 route(
@@ -48,5 +54,8 @@ route(
     request: { params: RunIdParams },
     responses: { 200: RunStatusResponseSchema, 404: 'Run not found or expired' },
   },
-  notImplemented,
+  async (req, res) => {
+    if (!req.user) throw unauthorized();
+    res.json(await getRun(getDeps(req).redis, req.params.runId, req.user));
+  },
 );

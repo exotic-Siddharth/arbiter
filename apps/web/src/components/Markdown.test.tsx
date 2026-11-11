@@ -25,7 +25,9 @@ describe('Markdown', () => {
 
   it('never renders raw HTML from the source', () => {
     const { container } = render(
-      <Markdown source={'Hello <script>alert(1)</script> <img src=x onerror="alert(2)"> <b>bold</b>'} />,
+      <Markdown
+        source={'Hello <script>alert(1)</script> <img src=x onerror="alert(2)"> <b>bold</b>'}
+      />,
     );
     expect(container.querySelector('script')).toBeNull();
     expect(container.querySelector('img')).toBeNull();
@@ -34,8 +36,14 @@ describe('Markdown', () => {
   });
 
   it('drops javascript: links and opens external links in a new tab', () => {
-    render(<Markdown source={'[bad](javascript:alert(1)) [docs](https://example.com/docs) [home](/problems)'} />);
-    expect(screen.getByText('bad').closest('a')?.getAttribute('href') ?? '').not.toContain('javascript');
+    render(
+      <Markdown
+        source={'[bad](javascript:alert(1)) [docs](https://example.com/docs) [home](/problems)'}
+      />,
+    );
+    expect(screen.getByText('bad').closest('a')?.getAttribute('href') ?? '').not.toContain(
+      'javascript',
+    );
     const external = screen.getByRole('link', { name: 'docs' });
     expect(external).toHaveAttribute('target', '_blank');
     expect(external).toHaveAttribute('rel', 'noopener noreferrer');

@@ -11,12 +11,21 @@ export interface DifficultyBadgeProps {
 }
 
 /** Easy / Medium / Hard in the spec 13.1 difficulty colours (--color-difficulty-*). */
-export function DifficultyBadge({ difficulty, variant = 'badge', size = 'md', className }: DifficultyBadgeProps) {
+export function DifficultyBadge({
+  difficulty,
+  variant = 'badge',
+  size = 'md',
+  className,
+}: DifficultyBadgeProps) {
   const info = DIFFICULTIES[difficulty];
   const color = `var(--color-${info.token})`;
   if (variant === 'text') {
     return (
-      <span data-difficulty={difficulty} style={{ color }} className={cn('text-[13px] font-medium', className)}>
+      <span
+        data-difficulty={difficulty}
+        style={{ color }}
+        className={cn('text-[13px] font-medium', className)}
+      >
         {info.label}
       </span>
     );

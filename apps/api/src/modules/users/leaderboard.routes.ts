@@ -1,7 +1,8 @@
 import { LeaderboardPageSchema, LeaderboardQuery } from '@arbiter/shared';
-import { createRouter, notImplemented } from '../../lib/router';
+import { getDeps } from '../../lib/deps';
+import { createRouter } from '../../lib/router';
+import { getLeaderboard } from './leaderboard.service';
 
-// Owner: lane A1. Scaffold stub: replace `notImplemented` with the real handler (keep the def).
 const { router, route } = createRouter('/api/leaderboard');
 export { router };
 
@@ -14,5 +15,7 @@ route(
     request: { query: LeaderboardQuery },
     responses: { 200: LeaderboardPageSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await getLeaderboard(getDeps(req).prisma, req.validatedQuery));
+  },
 );

@@ -67,7 +67,12 @@ export function ButtonLink({
 }: ButtonLinkProps) {
   return (
     <Link
-      className={buttonStyles({ variant, size, fullWidth, className: className as string | undefined })}
+      className={buttonStyles({
+        variant,
+        size,
+        fullWidth,
+        className: className as string | undefined,
+      })}
       {...props}
     >
       {leftIcon}

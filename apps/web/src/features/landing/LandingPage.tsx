@@ -1,28 +1,24 @@
-// Placeholder from S5: lane A5 replaces this file with the landing page (spec 13.2: hero, live
-// feed, stats, sandbox explainer, featured contest). Keep the file path and the `Component`
-// export (router.tsx lazy-loads it, R18).
-import { ArrowRight } from 'lucide-react';
-import { DevPlaceholder } from '@/components/layout/DevPlaceholder';
-import { Page } from '@/components/layout/Page';
-import { ButtonLink } from '@/components/ui/Button';
+import { useDocumentTitle } from '@/lib/useDocumentTitle';
+import { FeaturedContest } from './components/FeaturedContest';
+import { Hero } from './components/Hero';
+import { LiveFeed } from './components/LiveFeed';
+import { SandboxSection } from './components/SandboxSection';
+import { StatsStrip } from './components/StatsStrip';
 
 export function Component() {
+  useDocumentTitle('Online judge');
   return (
-    <Page
-      title="Write code. Get judged in a sandbox. Climb the board."
-      documentTitle="Online judge"
-      description="Solve original algorithmic problems in C++, Python, Java or JavaScript. Every submission runs in a locked-down Docker sandbox and its verdict streams back test by test."
-      actions={
-        <ButtonLink to="/problems" size="lg" rightIcon={<ArrowRight />}>
-          Start solving
-        </ButtonLink>
-      }
-    >
-      <DevPlaceholder
-        lane="A5"
-        description="Live feed of judged submissions, stats, the sandbox explainer and the featured contest."
-      />
-    </Page>
+    <div className="w-full">
+      <Hero />
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+        <StatsStrip />
+        <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <LiveFeed />
+          <FeaturedContest />
+        </div>
+      </div>
+      <SandboxSection />
+    </div>
   );
 }
 

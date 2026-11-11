@@ -1,7 +1,8 @@
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
-export type BadgeTone = 'neutral' | 'primary' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
+export type BadgeTone =
+  'neutral' | 'primary' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
 
 const TONE_COLOR: Record<BadgeTone, string> = {
   neutral: 'var(--color-muted)',

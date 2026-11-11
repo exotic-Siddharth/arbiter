@@ -1,0 +1,10 @@
+{
+  "slug": "night-ferries",
+  "title": "Night Ferries",
+  "difficulty": "HARD",
+  "tags": ["shortest-paths", "graphs", "heap"],
+  "timeLimitMs": 2000,
+  "memoryLimitMb": 256,
+  "checker": "TOKENS",
+  "samples": [1, 2]
+}

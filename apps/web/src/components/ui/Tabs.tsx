@@ -183,7 +183,13 @@ export interface TabsContentProps extends ComponentProps<'div'> {
   keepMounted?: boolean;
 }
 
-export function TabsContent({ value, keepMounted = false, className, children, ...props }: TabsContentProps) {
+export function TabsContent({
+  value,
+  keepMounted = false,
+  className,
+  children,
+  ...props
+}: TabsContentProps) {
   const { value: current, baseId } = useTabs('TabsContent');
   const selected = current === value;
   if (!selected && !keepMounted) return null;

@@ -5,9 +5,10 @@ import {
   IdParams,
   PatchUserRoleBody,
 } from '@arbiter/shared';
-import { createRouter, notImplemented } from '../../lib/router';
+import { getDeps } from '../../lib/deps';
+import { createRouter } from '../../lib/router';
+import { listUsers, setUserRole } from './users.service';
 
-// Owner: lane A1. Scaffold stub: replace `notImplemented` with the real handlers (keep the defs).
 const { router, route } = createRouter('/api/admin/users');
 export { router };
 
@@ -21,7 +22,9 @@ route(
     request: { query: AdminUserListQuery },
     responses: { 200: AdminUserPageSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await listUsers(getDeps(req).prisma, req.validatedQuery));
+  },
 );
 
 route(
@@ -29,10 +32,14 @@ route(
     method: 'patch',
     path: '/:id',
     summary: "Change a user's role",
+    description: 'The last remaining admin cannot be demoted (409).',
     tags: ['Admin: users'],
     auth: 'admin',
     request: { params: IdParams, body: PatchUserRoleBody },
-    responses: { 200: AdminUserResponseSchema, 404: 'User not found' },
+    responses: { 200: AdminUserResponseSchema, 404: 'User not found', 409: 'Last admin' },
   },
-  notImplemented,
+  async (req, res) => {
+    const user = await setUserRole(getDeps(req).prisma, req.params.id, req.body.role);
+    res.json({ user });
+  },
 );

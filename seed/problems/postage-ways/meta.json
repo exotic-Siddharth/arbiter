@@ -1,0 +1,10 @@
+{
+  "slug": "postage-ways",
+  "title": "Postage Ways",
+  "difficulty": "MEDIUM",
+  "tags": ["dp", "math"],
+  "timeLimitMs": 2000,
+  "memoryLimitMb": 256,
+  "checker": "TOKENS",
+  "samples": [1, 2]
+}

@@ -1,0 +1,10 @@
+{
+  "slug": "motif-search",
+  "title": "Motif Search",
+  "difficulty": "HARD",
+  "tags": ["string-matching", "strings"],
+  "timeLimitMs": 2000,
+  "memoryLimitMb": 256,
+  "checker": "TOKENS",
+  "samples": [1, 2]
+}

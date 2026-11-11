@@ -161,7 +161,8 @@ export function useSocketEvent<E extends ServerEvent>(
     const listener = (payload: unknown) => {
       const parsed = schema.safeParse(payload);
       if (!parsed.success) {
-        if (import.meta.env.DEV) console.warn(`[socket] dropped invalid ${event}`, parsed.error.issues);
+        if (import.meta.env.DEV)
+          console.warn(`[socket] dropped invalid ${event}`, parsed.error.issues);
         return;
       }
       handlerRef.current(parsed.data as ServerEventPayload<E>);
@@ -185,9 +186,7 @@ export interface RoomPayloads {
 }
 export type RoomEvent = keyof RoomPayloads;
 export type RoomUnsubscribeEvent =
-  | 'submission:unsubscribe'
-  | 'contest:unsubscribe'
-  | 'feed:unsubscribe';
+  'submission:unsubscribe' | 'contest:unsubscribe' | 'feed:unsubscribe';
 
 const UNSUBSCRIBE_EVENT: Record<RoomEvent, RoomUnsubscribeEvent> = {
   'submission:subscribe': 'submission:unsubscribe',
