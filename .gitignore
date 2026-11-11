@@ -35,3 +35,6 @@ Thumbs.db
 seed/problems/*/tests/*
 !seed/problems/*/tests/01.*
 !seed/problems/*/tests/02.*
+
+# Throwaway probe tests written by review agents (deleted before each review commit)
+__review__/

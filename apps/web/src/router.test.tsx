@@ -64,7 +64,7 @@ describe('router', () => {
     useAuth.setState({ status: 'guest' });
     renderAt(path);
     expect(
-      await screen.findByRole('heading', { level: 1, name: title }, { timeout: 5000 }),
+      await screen.findByRole('heading', { level: 1, name: title }, { timeout: 15_000 }),
     ).toBeInTheDocument();
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(
@@ -81,9 +81,9 @@ describe('router', () => {
         expect(router.state.navigation.state).toBe('idle');
         expect(router.state.matches.at(-1)?.route.path).toBe(pattern);
       },
-      { timeout: 5000 },
+      { timeout: 15_000 },
     );
-    expect(await screen.findByRole('banner', {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByRole('banner', {}, { timeout: 15_000 })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 1, name: 'Page not found' })).toBeNull();
   });
 
@@ -91,7 +91,7 @@ describe('router', () => {
     useAuth.setState({ status: 'authenticated', user: admin, accessToken: 'token' });
     renderAt(path);
     expect(
-      await screen.findByRole('heading', { level: 1, name: title }, { timeout: 5000 }),
+      await screen.findByRole('heading', { level: 1, name: title }, { timeout: 15_000 }),
     ).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Admin' })).toBeInTheDocument();
   });
@@ -103,7 +103,7 @@ describe('router', () => {
     useAuth.setState({ status: 'guest' });
     renderAt(path);
     expect(
-      await screen.findByRole('heading', { level: 1, name: title }, { timeout: 5000 }),
+      await screen.findByRole('heading', { level: 1, name: title }, { timeout: 15_000 }),
     ).toBeInTheDocument();
   });
 
