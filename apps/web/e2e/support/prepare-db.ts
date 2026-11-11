@@ -18,7 +18,9 @@ const requireFromApi = createRequire(new URL('../../../api/package.json', import
 const databaseUrl = process.env.DATABASE_URL ?? '';
 const databaseName = databaseUrl ? new URL(databaseUrl).pathname.replace(/^\//, '') : '';
 if (!databaseName.endsWith('_e2e')) {
-  console.error(`[e2e] refusing to prepare database "${databaseName || '(unset)'}": expected *_e2e`);
+  console.error(
+    `[e2e] refusing to prepare database "${databaseName || '(unset)'}": expected *_e2e`,
+  );
   process.exit(1);
 }
 
@@ -28,6 +30,10 @@ const run = (label: string, args: string[]) => {
   execFileSync(process.execPath, args, { cwd: API_DIR, env, stdio: 'inherit' });
 };
 
-run(`migrate ${databaseName}`, [requireFromApi.resolve('prisma/build/index.js'), 'migrate', 'deploy']);
+run(`migrate ${databaseName}`, [
+  requireFromApi.resolve('prisma/build/index.js'),
+  'migrate',
+  'deploy',
+]);
 run(`seed ${databaseName}`, [requireFromApi.resolve('tsx/cli'), 'prisma/seed.ts']);
 console.log('[e2e] database ready');

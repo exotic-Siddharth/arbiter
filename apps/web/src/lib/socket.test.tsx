@@ -30,7 +30,10 @@ describe('useRoom (R6)', () => {
     const { unmount } = render(<Room slug="weekly" />, { wrapper });
     expect(fake.emitted).toEqual([{ event: 'contest:subscribe', args: [{ slug: 'weekly' }] }]);
     unmount();
-    expect(fake.emitted.at(-1)).toEqual({ event: 'contest:unsubscribe', args: [{ slug: 'weekly' }] });
+    expect(fake.emitted.at(-1)).toEqual({
+      event: 'contest:unsubscribe',
+      args: [{ slug: 'weekly' }],
+    });
   });
 
   it('re-subscribes on every reconnect and invalidates the given queries', () => {
@@ -108,14 +111,30 @@ describe('useSocketEvent', () => {
     setSocketForTesting(fake.socket);
     const seen: string[] = [];
     function Listener({ prefix }: { prefix: string }) {
-      useSocketEvent('submission:status', (event) => seen.push(`${prefix}:${event.id}:${event.status}`));
+      useSocketEvent('submission:status', (event) =>
+        seen.push(`${prefix}:${event.id}:${event.status}`),
+      );
       return null;
     }
     const { wrapper } = wrapperWith();
     const { rerender } = render(<Listener prefix="one" />, { wrapper });
-    act(() => fake.serverEmit('submission:status', { id: 's1', status: 'RUNNING', testsDone: 1, testsTotal: 5 }));
+    act(() =>
+      fake.serverEmit('submission:status', {
+        id: 's1',
+        status: 'RUNNING',
+        testsDone: 1,
+        testsTotal: 5,
+      }),
+    );
     rerender(<Listener prefix="two" />);
-    act(() => fake.serverEmit('submission:status', { id: 's1', status: 'DONE', testsDone: 5, testsTotal: 5 }));
+    act(() =>
+      fake.serverEmit('submission:status', {
+        id: 's1',
+        status: 'DONE',
+        testsDone: 5,
+        testsTotal: 5,
+      }),
+    );
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     act(() =>
       fake.serverEmit('submission:status', { id: 's1', status: 'BOGUS' } as unknown as Parameters<

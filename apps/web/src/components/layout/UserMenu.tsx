@@ -4,7 +4,13 @@ import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { RatingBadge } from '@/components/RatingBadge';
 import { Avatar } from '@/components/ui/Avatar';
-import { DropdownMenu, MenuItem, MenuLabel, MenuLink, MenuSeparator } from '@/components/ui/DropdownMenu';
+import {
+  DropdownMenu,
+  MenuItem,
+  MenuLabel,
+  MenuLink,
+  MenuSeparator,
+} from '@/components/ui/DropdownMenu';
 import { useAuth } from '@/stores/auth';
 
 /** Signed-in user's menu: profile, submissions, admin (admins only) and log out. */
@@ -38,7 +44,9 @@ export function UserMenu({ user }: { user: Me }) {
       <MenuLabel className="flex items-center justify-between gap-3 py-2">
         <span className="min-w-0">
           <span className="block text-[11px] uppercase tracking-wide">Signed in as</span>
-          <span className="block truncate text-sm font-semibold text-foreground">{user.username}</span>
+          <span className="block truncate text-sm font-semibold text-foreground">
+            {user.username}
+          </span>
         </span>
         <RatingBadge rating={user.rating} showTier={false} size="sm" />
       </MenuLabel>

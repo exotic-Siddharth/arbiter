@@ -43,8 +43,7 @@ const serverEnv: Record<string, string> = {
   LOG_LEVEL: process.env.E2E_LOG_LEVEL ?? 'warn',
 };
 
-const node = (script: string, ...args: string[]) =>
-  ['node', `"${script}"`, ...args].join(' ');
+const node = (script: string, ...args: string[]) => ['node', `"${script}"`, ...args].join(' ');
 
 export default defineConfig({
   testDir: './e2e',

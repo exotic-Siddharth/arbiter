@@ -12,9 +12,24 @@ import {
   ProblemTestParams,
 } from '@arbiter/shared';
 import express from 'express';
-import { createRouter, notImplemented } from '../../lib/router';
+import { getDeps } from '../../lib/deps';
+import { unauthorized } from '../../lib/errors';
+import { createRouter } from '../../lib/router';
+import {
+  bulkAdminTests,
+  createAdminProblem,
+  createAdminTest,
+  deleteAdminProblem,
+  deleteAdminTest,
+  getAdminProblem,
+  getAdminTest,
+  listAdminProblems,
+  listAdminTests,
+  updateAdminProblem,
+  updateAdminTest,
+} from '../problems/admin.service';
 
-// Owner: lane A3. Scaffold stub: replace `notImplemented` with the real handlers (keep the defs).
+// Owner: lane A3a.
 const { router, route } = createRouter('/api/admin/problems');
 export { router };
 
@@ -31,7 +46,9 @@ route(
     request: { query: AdminProblemListQuery },
     responses: { 200: AdminProblemPageSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await listAdminProblems(getDeps(req).prisma, req.validatedQuery));
+  },
 );
 
 route(
@@ -44,7 +61,10 @@ route(
     request: { body: AdminProblemBody },
     responses: { 201: AdminProblemSchema, 409: 'Slug already taken' },
   },
-  notImplemented,
+  async (req, res) => {
+    if (!req.user) throw unauthorized();
+    res.status(201).json(await createAdminProblem(getDeps(req).prisma, req.body, req.user.id));
+  },
 );
 
 route(
@@ -57,7 +77,9 @@ route(
     request: { params: IdParams },
     responses: { 200: AdminProblemSchema, 404: 'Problem not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await getAdminProblem(getDeps(req).prisma, req.params.id));
+  },
 );
 
 route(
@@ -70,7 +92,9 @@ route(
     request: { params: IdParams, body: AdminProblemBody },
     responses: { 200: AdminProblemSchema, 404: 'Problem not found', 409: 'Slug already taken' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await updateAdminProblem(getDeps(req).prisma, req.params.id, req.body));
+  },
 );
 
 route(
@@ -83,7 +107,10 @@ route(
     request: { params: IdParams },
     responses: { 204: null, 404: 'Problem not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    await deleteAdminProblem(getDeps(req).prisma, req.params.id);
+    res.status(204).end();
+  },
 );
 
 route(
@@ -96,7 +123,9 @@ route(
     request: { params: IdParams },
     responses: { 200: AdminTestListSchema, 404: 'Problem not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await listAdminTests(getDeps(req).prisma, req.params.id));
+  },
 );
 
 route(
@@ -109,7 +138,9 @@ route(
     request: { params: IdParams, body: AdminTestBody },
     responses: { 201: AdminTestCaseSchema, 404: 'Problem not found', 409: 'Ordinal already used' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.status(201).json(await createAdminTest(getDeps(req).prisma, req.params.id, req.body));
+  },
 );
 
 route(
@@ -127,7 +158,9 @@ route(
       413: 'Body larger than 20 MB',
     },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await bulkAdminTests(getDeps(req).prisma, req.params.id, req.body));
+  },
 );
 
 route(
@@ -140,7 +173,9 @@ route(
     request: { params: ProblemTestParams },
     responses: { 200: AdminTestCaseSchema, 404: 'Test case not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await getAdminTest(getDeps(req).prisma, req.params.id, req.params.testId));
+  },
 );
 
 route(
@@ -157,7 +192,10 @@ route(
       409: 'Ordinal already used',
     },
   },
-  notImplemented,
+  async (req, res) => {
+    const { id, testId } = req.params;
+    res.json(await updateAdminTest(getDeps(req).prisma, id, testId, req.body));
+  },
 );
 
 route(
@@ -170,5 +208,8 @@ route(
     request: { params: ProblemTestParams },
     responses: { 204: null, 404: 'Test case not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    await deleteAdminTest(getDeps(req).prisma, req.params.id, req.params.testId);
+    res.status(204).end();
+  },
 );

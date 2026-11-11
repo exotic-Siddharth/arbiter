@@ -335,7 +335,7 @@
     font-size: 1.15rem;
   }
   .markdown h3 {
-    font-size: 1.0rem;
+    font-size: 1rem;
   }
   .markdown :where(h4, h5, h6) {
     font-size: 0.9375rem;

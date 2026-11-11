@@ -40,7 +40,13 @@ export function createTestQueryClient(): QueryClient {
  */
 export function renderWithProviders(
   ui: ReactElement,
-  { route = '/', path = '*', queryClient, user = null, ...options }: RenderWithProvidersOptions = {},
+  {
+    route = '/',
+    path = '*',
+    queryClient,
+    user = null,
+    ...options
+  }: RenderWithProvidersOptions = {},
 ): RenderWithProvidersResult {
   const client = queryClient ?? createTestQueryClient();
   useAuth.setState(

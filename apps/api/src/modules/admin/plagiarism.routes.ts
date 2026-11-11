@@ -6,9 +6,15 @@ import {
   PlagiarismReportDetailSchema,
   PlagiarismReportListSchema,
 } from '@arbiter/shared';
-import { createRouter, notImplemented } from '../../lib/router';
+import { getDeps } from '../../lib/deps';
+import { createRouter } from '../../lib/router';
+import {
+  createPlagiarismReport,
+  getPlagiarismReport,
+  listPlagiarismReports,
+} from '../plagiarism/admin';
 
-// Owner: lane A3. Scaffold stub: replace `notImplemented` with the real handlers (keep the defs).
+// Owner: lane A3b. Mounted at /api/admin/plagiarism behind requireRole('ADMIN') (R10).
 const { router, route } = createRouter('/api/admin/plagiarism');
 export { router };
 
@@ -22,7 +28,9 @@ route(
     request: { body: CreatePlagiarismBody },
     responses: { 202: PlagiarismCreatedResponseSchema, 404: 'Contest or problem not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.status(202).json(await createPlagiarismReport(getDeps(req).prisma, req.body));
+  },
 );
 
 route(
@@ -35,7 +43,9 @@ route(
     request: { query: PlagiarismListQuery },
     responses: { 200: PlagiarismReportListSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await listPlagiarismReports(getDeps(req).prisma, req.validatedQuery.contestId));
+  },
 );
 
 route(
@@ -48,5 +58,7 @@ route(
     request: { params: IdParams },
     responses: { 200: PlagiarismReportDetailSchema, 404: 'Report not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await getPlagiarismReport(getDeps(req).prisma, req.params.id));
+  },
 );

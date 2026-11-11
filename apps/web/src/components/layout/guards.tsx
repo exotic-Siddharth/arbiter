@@ -55,6 +55,7 @@ export function GuestOnly({ children }: GuardProps) {
   const status = useAuth((state) => state.status);
   const [params] = useSearchParams();
   if (status === 'unknown') return <PageSpinner label="Checking your session…" />;
-  if (status === 'authenticated') return <Navigate to={safeRedirectPath(params.get('next'))} replace />;
+  if (status === 'authenticated')
+    return <Navigate to={safeRedirectPath(params.get('next'))} replace />;
   return <>{children ?? <Outlet />}</>;
 }

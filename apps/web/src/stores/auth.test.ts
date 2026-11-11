@@ -45,7 +45,10 @@ describe('auth store', () => {
     window.localStorage.setItem('arbiter:session', '1');
     const request = vi.fn((_name: string, task: () => Promise<unknown>) => task());
     vi.stubGlobal('navigator', { ...navigator, locks: { request } });
-    vi.stubGlobal('fetch', vi.fn(async () => authResponse('locked')));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => authResponse('locked')),
+    );
 
     await useAuth.getState().refresh();
 
@@ -98,7 +101,10 @@ describe('auth store', () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('/api/auth/login');
     expect(JSON.parse(String(init.body))).toEqual({ identifier: 'demo', password: 'demo12345' });
-    expect(useAuth.getState()).toMatchObject({ status: 'authenticated', accessToken: 'login-token' });
+    expect(useAuth.getState()).toMatchObject({
+      status: 'authenticated',
+      accessToken: 'login-token',
+    });
     expect(window.localStorage.getItem('arbiter:session')).toBe('1');
   });
 });

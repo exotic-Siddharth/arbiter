@@ -13,7 +13,11 @@ export interface MockRequest {
 export type MockHandler = (request: MockRequest) => Response | Promise<Response>;
 
 /** A JSON Response: jsonResponse(200, page), jsonResponse(429, err, { 'Retry-After': '30' }). */
-export function jsonResponse(status: number, body?: unknown, headers: Record<string, string> = {}): Response {
+export function jsonResponse(
+  status: number,
+  body?: unknown,
+  headers: Record<string, string> = {},
+): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json', ...headers },
@@ -21,8 +25,15 @@ export function jsonResponse(status: number, body?: unknown, headers: Record<str
 }
 
 /** The API error body: apiError(409, 'CONFLICT', 'Username already taken'). */
-export function apiError(status: number, code: string, message: string, details?: unknown): Response {
-  return jsonResponse(status, { error: { code, message, ...(details === undefined ? {} : { details }) } });
+export function apiError(
+  status: number,
+  code: string,
+  message: string,
+  details?: unknown,
+): Response {
+  return jsonResponse(status, {
+    error: { code, message, ...(details === undefined ? {} : { details }) },
+  });
 }
 
 /**

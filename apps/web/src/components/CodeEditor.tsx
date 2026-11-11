@@ -19,7 +19,9 @@ type StandaloneEditor = Monaco.editor.IStandaloneCodeEditor;
 export type EditorOptions = Monaco.editor.IStandaloneEditorConstructionOptions;
 
 // Monaco (~4 MB) loads on first use; jsdom tests vi.mock('@/lib/monaco') (R18).
-const MonacoEditor = lazy(() => import('@/lib/monaco').then((module) => ({ default: module.MonacoEditor })));
+const MonacoEditor = lazy(() =>
+  import('@/lib/monaco').then((module) => ({ default: module.MonacoEditor })),
+);
 
 const BASE_OPTIONS: EditorOptions = {
   fontFamily: "'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
@@ -40,7 +42,11 @@ const BASE_OPTIONS: EditorOptions = {
   hideCursorInOverviewRuler: true,
   stickyScroll: { enabled: false },
   bracketPairColorization: { enabled: true },
-  scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, alwaysConsumeMouseWheel: false },
+  scrollbar: {
+    verticalScrollbarSize: 10,
+    horizontalScrollbarSize: 10,
+    alwaysConsumeMouseWheel: false,
+  },
 };
 
 /** A shortcut inside the editor: keys like "Mod+Enter" or "Mod+'" (Mod = Ctrl, Cmd on macOS). */
@@ -126,7 +132,11 @@ class EditorErrorBoundary extends Component<BoundaryProps, { failed: boolean }> 
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error('Code editor failed to load; using the plain fallback', error, info.componentStack);
+    console.error(
+      'Code editor failed to load; using the plain fallback',
+      error,
+      info.componentStack,
+    );
   }
 
   override render(): ReactNode {
@@ -154,7 +164,8 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const appTheme = useTheme((state) => state.theme);
   const resolvedTheme = theme ?? appTheme;
-  const monacoLanguage = language in LANGUAGES ? LANGUAGES[language as Language].monacoId : language;
+  const monacoLanguage =
+    language in LANGUAGES ? LANGUAGES[language as Language].monacoId : language;
   const actionPrefix = useId();
   const keybindingsRef = useRef(keybindings);
   const onMountRef = useRef(onMount);
@@ -193,7 +204,10 @@ export function CodeEditor({
 
   return (
     <div
-      className={cn('relative overflow-hidden rounded-control border border-border bg-surface', className)}
+      className={cn(
+        'relative overflow-hidden rounded-control border border-border bg-surface',
+        className,
+      )}
       style={{ height }}
     >
       <EditorErrorBoundary fallback={fallback}>

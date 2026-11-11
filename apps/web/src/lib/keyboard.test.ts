@@ -8,9 +8,13 @@ describe('keyboard shortcuts (jsdom is not macOS, so Mod = Ctrl)', () => {
   it('matches combos exactly', () => {
     expect(matchesHotkey(key({ key: 'Enter', ctrlKey: true }), 'Mod+Enter')).toBe(true);
     expect(matchesHotkey(key({ key: 'Enter' }), 'Mod+Enter')).toBe(false);
-    expect(matchesHotkey(key({ key: 'Enter', ctrlKey: true, altKey: true }), 'Mod+Enter')).toBe(false);
+    expect(matchesHotkey(key({ key: 'Enter', ctrlKey: true, altKey: true }), 'Mod+Enter')).toBe(
+      false,
+    );
     expect(matchesHotkey(key({ key: "'", ctrlKey: true }), "Mod+'")).toBe(true);
-    expect(matchesHotkey(key({ key: 'Enter', ctrlKey: true, shiftKey: true }), 'Shift+Mod+Enter')).toBe(true);
+    expect(
+      matchesHotkey(key({ key: 'Enter', ctrlKey: true, shiftKey: true }), 'Shift+Mod+Enter'),
+    ).toBe(true);
     expect(matchesHotkey(key({ key: 'Escape' }), 'Escape')).toBe(true);
   });
 

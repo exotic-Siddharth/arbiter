@@ -64,13 +64,28 @@ export const routes: RouteObject[] = [
             children: [
               { index: true, lazy: () => import('@/features/admin/JudgeMonitorPage') },
               { path: 'problems', lazy: () => import('@/features/admin/AdminProblemsPage') },
-              { path: 'problems/new', lazy: () => import('@/features/admin/AdminProblemEditorPage') },
-              { path: 'problems/:id', lazy: () => import('@/features/admin/AdminProblemEditorPage') },
+              {
+                path: 'problems/new',
+                lazy: () => import('@/features/admin/AdminProblemEditorPage'),
+              },
+              {
+                path: 'problems/:id',
+                lazy: () => import('@/features/admin/AdminProblemEditorPage'),
+              },
               { path: 'contests', lazy: () => import('@/features/admin/AdminContestsPage') },
-              { path: 'contests/new', lazy: () => import('@/features/admin/AdminContestEditorPage') },
-              { path: 'contests/:id', lazy: () => import('@/features/admin/AdminContestEditorPage') },
+              {
+                path: 'contests/new',
+                lazy: () => import('@/features/admin/AdminContestEditorPage'),
+              },
+              {
+                path: 'contests/:id',
+                lazy: () => import('@/features/admin/AdminContestEditorPage'),
+              },
               { path: 'plagiarism', lazy: () => import('@/features/admin/PlagiarismPage') },
-              { path: 'plagiarism/:id', lazy: () => import('@/features/admin/PlagiarismReportPage') },
+              {
+                path: 'plagiarism/:id',
+                lazy: () => import('@/features/admin/PlagiarismReportPage'),
+              },
               { path: 'users', lazy: () => import('@/features/admin/AdminUsersPage') },
             ],
           },

@@ -1,0 +1,10 @@
+{
+  "slug": "lantern-spacing",
+  "title": "Lantern Spacing",
+  "difficulty": "MEDIUM",
+  "tags": ["binary-search", "greedy", "sorting"],
+  "timeLimitMs": 2000,
+  "memoryLimitMb": 256,
+  "checker": "TOKENS",
+  "samples": [1, 2]
+}

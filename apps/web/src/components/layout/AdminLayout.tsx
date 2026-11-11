@@ -22,7 +22,10 @@ export function AdminLayout() {
           <ShieldCheck aria-hidden="true" className="size-4" />
           Admin
         </div>
-        <nav aria-label="Admin" className="-mx-4 overflow-x-auto px-4 scrollbar-none lg:mx-0 lg:px-0">
+        <nav
+          aria-label="Admin"
+          className="-mx-4 overflow-x-auto px-4 scrollbar-none lg:mx-0 lg:px-0"
+        >
           <ul className="flex gap-1 lg:sticky lg:top-20 lg:flex-col">
             {ADMIN_NAV.map((item) => (
               <li key={item.to} className="shrink-0">

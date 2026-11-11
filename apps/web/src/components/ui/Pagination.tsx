@@ -66,7 +66,10 @@ export function Pagination({
               <span className="font-medium text-foreground tabular-nums">
                 {formatNumber(from)}–{formatNumber(to)}
               </span>{' '}
-              of <span className="font-medium text-foreground tabular-nums">{formatNumber(total)}</span>{' '}
+              of{' '}
+              <span className="font-medium text-foreground tabular-nums">
+                {formatNumber(total)}
+              </span>{' '}
               {itemLabel}
             </>
           )}

@@ -57,7 +57,13 @@ export function VerdictBadge({
     // DONE/FAILED without a verdict: the judge could not finish (spec 7: FAILED = IE).
     const info = VERDICTS.IE;
     return (
-      <Badge data-verdict="IE" color={`var(--color-${info.token})`} size={size} mono className={className}>
+      <Badge
+        data-verdict="IE"
+        color={`var(--color-${info.token})`}
+        size={size}
+        mono
+        className={className}
+      >
         {status === 'FAILED' ? SUBMISSION_STATUS_LABELS.FAILED : info.label}
       </Badge>
     );

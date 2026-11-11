@@ -7,9 +7,12 @@ import {
   SubmissionPageSchema,
 } from '@arbiter/shared';
 import { RATE_LIMITS, rateLimit } from '../../lib/rateLimit';
-import { createRouter, notImplemented } from '../../lib/router';
+import { getDeps } from '../../lib/deps';
+import { unauthorized } from '../../lib/errors';
+import { createRouter } from '../../lib/router';
+import { createSubmission, getSubmissionDetail, listSubmissions } from './service';
 
-// Owner: lane A3. Scaffold stub: replace `notImplemented` with the real handlers (keep the defs).
+// Owner: lane A3a.
 const { router, route } = createRouter('/api/submissions');
 export { router };
 
@@ -38,7 +41,11 @@ route(
     },
   },
   submissionLimiter,
-  notImplemented,
+  async (req, res) => {
+    if (!req.user) throw unauthorized();
+    const submission = await createSubmission(getDeps(req).prisma, req.body, req.user);
+    res.status(202).json({ submission });
+  },
 );
 
 route(
@@ -51,7 +58,9 @@ route(
     request: { query: ListSubmissionsQuery },
     responses: { 200: SubmissionPageSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await listSubmissions(getDeps(req).prisma, req.validatedQuery, req.user));
+  },
 );
 
 route(
@@ -64,5 +73,7 @@ route(
     request: { params: IdParams },
     responses: { 200: SubmissionDetailSchema, 404: 'Submission not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await getSubmissionDetail(getDeps(req).prisma, req.params.id, req.user));
+  },
 );

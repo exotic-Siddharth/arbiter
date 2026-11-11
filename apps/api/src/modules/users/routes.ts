@@ -1,7 +1,11 @@
 import { MeResponseSchema, PatchMeBody, ProfileSchema, UsernameParams } from '@arbiter/shared';
-import { createRouter, notImplemented } from '../../lib/router';
+import { Prisma } from '@prisma/client';
+import { getDeps } from '../../lib/deps';
+import { unauthorized } from '../../lib/errors';
+import { createRouter } from '../../lib/router';
+import { toMe } from '../auth/service';
+import { getProfile } from './profile.service';
 
-// Owner: lane A1. Scaffold stub: replace `notImplemented` with the real handlers (keep the defs).
 const { router, route } = createRouter('/api/users');
 export { router };
 
@@ -15,7 +19,22 @@ route(
     request: { body: PatchMeBody },
     responses: { 200: MeResponseSchema },
   },
-  notImplemented,
+  async (req, res) => {
+    const bio = req.body.bio === null || req.body.bio === '' ? null : req.body.bio;
+    try {
+      const user = await getDeps(req).prisma.user.update({
+        where: { id: req.user!.id },
+        data: { bio },
+      });
+      res.json({ user: toMe(user) });
+    } catch (error) {
+      // The account was deleted after the access token was issued.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw unauthorized('Account no longer exists');
+      }
+      throw error;
+    }
+  },
 );
 
 route(
@@ -27,5 +46,7 @@ route(
     request: { params: UsernameParams },
     responses: { 200: ProfileSchema, 404: 'User not found' },
   },
-  notImplemented,
+  async (req, res) => {
+    res.json(await getProfile(getDeps(req).prisma, req.params.username));
+  },
 );

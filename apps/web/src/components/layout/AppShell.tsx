@@ -16,7 +16,9 @@ export interface RouteHandle {
  */
 export function AppShell() {
   const matches = useMatches();
-  const workspace = matches.some((match) => (match.handle as RouteHandle | undefined)?.layout === 'workspace');
+  const workspace = matches.some(
+    (match) => (match.handle as RouteHandle | undefined)?.layout === 'workspace',
+  );
 
   return (
     <div className={cn('flex min-h-dvh flex-col', workspace && 'lg:h-dvh lg:overflow-hidden')}>
@@ -28,7 +30,11 @@ export function AppShell() {
       </a>
       <NavigationProgress />
       <Navbar />
-      <main id="main" tabIndex={-1} className={cn('flex flex-1 flex-col outline-none', workspace && 'min-h-0')}>
+      <main
+        id="main"
+        tabIndex={-1}
+        className={cn('flex flex-1 flex-col outline-none', workspace && 'min-h-0')}
+      >
         <Outlet />
       </main>
       {workspace ? null : <Footer />}

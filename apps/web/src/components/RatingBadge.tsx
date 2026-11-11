@@ -25,7 +25,11 @@ export function RatingBadge({
   const tier = getRatingTier(rating);
   const color = tierColor(rating);
   const tierLabel = (
-    <span className={showTier ? (variant === 'text' ? 'font-sans font-medium' : 'font-sans') : 'sr-only'}>
+    <span
+      className={
+        showTier ? (variant === 'text' ? 'font-sans font-medium' : 'font-sans') : 'sr-only'
+      }
+    >
       {tier.name}
     </span>
   );
@@ -36,7 +40,10 @@ export function RatingBadge({
         data-tier={tier.name}
         title={`${tier.name} · ${rating}`}
         style={{ '--badge-color': color, color } as CSSProperties}
-        className={cn('inline-flex items-baseline gap-1.5 font-mono font-semibold tabular-nums', className)}
+        className={cn(
+          'inline-flex items-baseline gap-1.5 font-mono font-semibold tabular-nums',
+          className,
+        )}
       >
         <span>{rating}</span>
         {tierLabel}

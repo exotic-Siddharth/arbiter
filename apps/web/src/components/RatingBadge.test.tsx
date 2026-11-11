@@ -21,6 +21,9 @@ describe('RatingBadge', () => {
   it('can hide the tier name visually but keeps it for screen readers', () => {
     render(<RatingBadge rating={1650} showTier={false} />);
     expect(screen.getByText('Expert')).toHaveClass('sr-only');
-    expect(screen.getByText('1650').closest('[data-tier]')).toHaveAttribute('title', 'Expert · 1650');
+    expect(screen.getByText('1650').closest('[data-tier]')).toHaveAttribute(
+      'title',
+      'Expert · 1650',
+    );
   });
 });

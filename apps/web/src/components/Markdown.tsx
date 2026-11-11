@@ -47,7 +47,11 @@ export interface MarkdownProps {
 export function Markdown({ source, className }: MarkdownProps) {
   return (
     <div className={cn('markdown', className)}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
+      <ReactMarkdown
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
+        components={components}
+      >
         {source}
       </ReactMarkdown>
     </div>

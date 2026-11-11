@@ -150,7 +150,14 @@ describe('api client', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await api.get('/problems', {
-      query: { search: 'graph', difficulty: undefined, tag: '', page: 2, mine: true, ids: ['a', 'b'] },
+      query: {
+        search: 'graph',
+        difficulty: undefined,
+        tag: '',
+        page: 2,
+        mine: true,
+        ids: ['a', 'b'],
+      },
     });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
@@ -205,7 +212,12 @@ describe('api client', () => {
             details: [
               { location: 'body', path: 'username', message: 'Too short', code: 'too_small' },
               { location: 'body', path: 'username', message: 'Second issue', code: 'custom' },
-              { location: 'body', path: 'email', message: 'Enter a valid email', code: 'invalid_string' },
+              {
+                location: 'body',
+                path: 'email',
+                message: 'Enter a valid email',
+                code: 'invalid_string',
+              },
             ],
           },
         }),

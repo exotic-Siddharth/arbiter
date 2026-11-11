@@ -22,7 +22,14 @@ export function Spinner({ size = 'md', label, className }: SpinnerProps) {
       aria-hidden="true"
       className={cn('shrink-0 animate-spin', className)}
     >
-      <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeOpacity="0.22" strokeWidth="2.5" />
+      <circle
+        cx="12"
+        cy="12"
+        r="9.5"
+        stroke="currentColor"
+        strokeOpacity="0.22"
+        strokeWidth="2.5"
+      />
       <path
         d="M21.5 12a9.5 9.5 0 0 0-9.5-9.5"
         stroke="currentColor"
@@ -48,7 +55,9 @@ export interface PageSpinnerProps {
 /** Centered spinner for a whole page or panel. */
 export function PageSpinner({ label = 'Loading…', className }: PageSpinnerProps) {
   return (
-    <div className={cn('flex min-h-[40vh] w-full items-center justify-center text-muted', className)}>
+    <div
+      className={cn('flex min-h-[40vh] w-full items-center justify-center text-muted', className)}
+    >
       <Spinner size="lg" label={label} />
     </div>
   );

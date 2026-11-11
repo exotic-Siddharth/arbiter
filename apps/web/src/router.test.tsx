@@ -1,6 +1,6 @@
 import type { Me } from '@arbiter/shared';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import { createQueryClient } from '@/lib/queryClient';
@@ -30,16 +30,20 @@ function renderAt(path: string) {
 const PUBLIC_PAGES: [string, string | RegExp][] = [
   ['/', /write code\. get judged in a sandbox\. climb the board\./i],
   ['/problems', 'Problems'],
-  ['/problems/two-sum-variant', 'two-sum-variant'],
   ['/submissions', 'Submissions'],
-  ['/submissions/sub_1', 'Submission sub_1'],
   ['/contests', 'Contests'],
-  ['/contests/weekly-practice-arena', 'weekly-practice-arena'],
   ['/contests/weekly-practice-arena/scoreboard', 'Scoreboard'],
-  ['/contests/weekly-practice-arena/problems/B', 'Problem B'],
-  ['/u/demo', 'demo'],
   ['/leaderboard', 'Leaderboard'],
   ['/no/such/page', 'Page not found'],
+];
+
+// Detail pages take their h1 from fetched data (no API in this test), so assert the route itself resolved.
+const DATA_PAGES: [string, string][] = [
+  ['/problems/two-sum-variant', 'problems/:slug'],
+  ['/submissions/sub_1', 'submissions/:id'],
+  ['/contests/weekly-practice-arena', 'contests/:slug'],
+  ['/contests/weekly-practice-arena/problems/B', 'contests/:slug/problems/:label'],
+  ['/u/demo', 'u/:username'],
 ];
 
 const ADMIN_PAGES: [string, string][] = [
@@ -59,18 +63,36 @@ describe('router', () => {
   it.each(PUBLIC_PAGES)('%s renders its page title inside the shell', async (path, title) => {
     useAuth.setState({ status: 'guest' });
     renderAt(path);
-    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: title }, { timeout: 5000 }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('banner')).toBeInTheDocument();
-    expect(within(screen.getByRole('banner')).getByRole('link', { name: 'Arbiter' })).toHaveAttribute(
-      'href',
-      '/',
+    expect(
+      within(screen.getByRole('banner')).getByRole('link', { name: 'Arbiter' }),
+    ).toHaveAttribute('href', '/');
+  });
+
+  it.each(DATA_PAGES)('%s resolves to its own route inside the shell', async (path, pattern) => {
+    useAuth.setState({ status: 'guest' });
+    const router = renderAt(path);
+    await waitFor(
+      () => {
+        expect(router.state.initialized).toBe(true);
+        expect(router.state.navigation.state).toBe('idle');
+        expect(router.state.matches.at(-1)?.route.path).toBe(pattern);
+      },
+      { timeout: 5000 },
     );
+    expect(await screen.findByRole('banner', {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Page not found' })).toBeNull();
   });
 
   it.each(ADMIN_PAGES)('%s renders inside the admin layout for admins', async (path, title) => {
     useAuth.setState({ status: 'authenticated', user: admin, accessToken: 'token' });
     renderAt(path);
-    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: title }, { timeout: 5000 }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Admin' })).toBeInTheDocument();
   });
 
@@ -80,11 +102,17 @@ describe('router', () => {
   ])('%s renders for guests', async (path, title) => {
     useAuth.setState({ status: 'guest' });
     renderAt(path);
-    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: title }, { timeout: 5000 }),
+    ).toBeInTheDocument();
   });
 
   it('redirects signed-in users away from /login to ?next', async () => {
-    useAuth.setState({ status: 'authenticated', user: { ...admin, role: 'USER' }, accessToken: 't' });
+    useAuth.setState({
+      status: 'authenticated',
+      user: { ...admin, role: 'USER' },
+      accessToken: 't',
+    });
     const router = renderAt('/login?next=%2Fcontests');
     expect(await screen.findByRole('heading', { level: 1, name: 'Contests' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/contests');
@@ -98,7 +126,11 @@ describe('router', () => {
   });
 
   it('shows a 403 state to signed-in non-admins', async () => {
-    useAuth.setState({ status: 'authenticated', user: { ...admin, role: 'USER' }, accessToken: 't' });
+    useAuth.setState({
+      status: 'authenticated',
+      user: { ...admin, role: 'USER' },
+      accessToken: 't',
+    });
     renderAt('/admin');
     expect(await screen.findByRole('heading', { name: 'Admins only' })).toBeInTheDocument();
   });

@@ -11,7 +11,10 @@ import { format, formatDistanceStrict } from 'date-fns';
 /** Display formatters shared by every page (numbers, sizes, times, dates). */
 
 const numberFormat = new Intl.NumberFormat('en-US');
-const compactFormat = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+const compactFormat = new Intl.NumberFormat('en-US', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
 
 /** 12345 -> "12,345" */
 export function formatNumber(value: number): string {
@@ -70,7 +73,10 @@ export function formatTime(value: string | number | Date): string {
 }
 
 /** "3 minutes ago", "in 2 days"; "just now" under 10 seconds. */
-export function formatRelativeTime(value: string | number | Date, now: number = Date.now()): string {
+export function formatRelativeTime(
+  value: string | number | Date,
+  now: number = Date.now(),
+): string {
   const date = toDate(value);
   if (Math.abs(date.getTime() - now) < 10_000) return 'just now';
   return formatDistanceStrict(date, now, { addSuffix: true });
