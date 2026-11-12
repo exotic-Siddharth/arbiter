@@ -149,7 +149,8 @@ starts sandbox containers through the `docker` CLI; if that is not on `PATH`, se
 first. Rerunning the seed gives the same data, with times relative to now. It contains 15 problems
 (193 tests), 32 users, 3 contests (one ended and rated, one running until 14 days after seeding, one
 upcoming) and about 1,100 historical submissions; [seed/problems/README.md](seed/problems/README.md)
-describes the problem folders.
+describes the problem folders, and [docs/ADDING-PROBLEMS.md](docs/ADDING-PROBLEMS.md) explains how to
+add problems, one at a time or as a larger set.
 
 Seed accounts, for local development only (a production start refuses the default admin password):
 
