@@ -19,6 +19,8 @@ import {
   pageSchema,
   utf8ByteLength,
   MeSchema,
+  Id,
+  ContestRoomPayload,
 } from './index';
 
 const contestDetail = {
@@ -243,5 +245,13 @@ describe('shared contracts', () => {
     const result = AdminContestBody.safeParse(tooLong);
     expect(result.success).toBe(false);
     expect(JSON.stringify(result.error?.issues)).toContain('endsAt');
+  });
+
+  it('rejects NUL characters in ids and room slugs (Postgres text cannot hold them)', () => {
+    const nul = String.fromCharCode(0);
+    expect(Id.safeParse('abc').success).toBe(true);
+    expect(Id.safeParse(`a${nul}b`).success).toBe(false);
+    expect(ContestRoomPayload.safeParse({ slug: 'round-1' }).success).toBe(true);
+    expect(ContestRoomPayload.safeParse({ slug: `x${nul}` }).success).toBe(false);
   });
 });

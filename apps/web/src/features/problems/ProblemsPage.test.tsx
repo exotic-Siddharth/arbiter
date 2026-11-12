@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { LIMITS } from '@arbiter/shared';
 import { describe, expect, it } from 'vitest';
 import { apiError, jsonResponse, mockFetch } from '@/test/fetchMock';
 import { renderWithProviders } from '@/test/render';
@@ -120,6 +121,27 @@ describe('ProblemsPage', { timeout: 20_000 }, () => {
     expect(await screen.findByText('Database is down.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
+
+  it.each(['1000001', '1e300'])(
+    'clamps ?page=%s to the API maximum and then moves to the last page (A-R2-17)',
+    async (raw) => {
+      const api = mockFetch({
+        'GET /api/problems': ({ query }) => {
+          const page = Number(query.get('page') ?? 1);
+          if (page > LIMITS.pageMax) return apiError(400, 'VALIDATION', 'page too large');
+          return jsonResponse(
+            200,
+            problemPage(page > 3 ? [] : problemSummaries, { page, pageSize: 20, total: 45 }),
+          );
+        },
+        'GET /api/tags': () => jsonResponse(200, tagCounts),
+      });
+      const { router } = renderWithProviders(<ProblemsPage />, { route: `/problems?page=${raw}` });
+      await screen.findByRole('link', { name: 'Lantern Relay' });
+      expect(problemRequests(api)[0]?.query.get('page')).toBe(String(LIMITS.pageMax));
+      expect(new URLSearchParams(router.state.location.search).get('page')).toBe('3');
+    },
+  );
 
   it('moves to the last page when ?page is past the end', async () => {
     const api = mockFetch({

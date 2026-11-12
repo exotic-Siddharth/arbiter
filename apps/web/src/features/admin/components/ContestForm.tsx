@@ -1,7 +1,7 @@
 import type { AdminContestBody } from '@arbiter/shared';
 import { useRef, useState, type FormEvent } from 'react';
 import { Alert, Button, Card, CardContent, CardHeader, Input, Switch } from '@/components/ui';
-import { fieldErrors, getErrorMessage, isApiError } from '@/lib/api';
+import { fieldErrors, getErrorMessage } from '@/lib/api';
 import {
   contestFormToBody,
   emptyContestForm,
@@ -9,6 +9,7 @@ import {
   type ContestFormState,
 } from '../lib/contestForm';
 import { localTimeZone } from '../lib/datetime';
+import { isSlugConflict } from '../lib/slugConflict';
 import { ContestProblemsEditor } from './ContestProblemsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { UnsavedChangesGuard } from './UnsavedChangesGuard';
@@ -61,7 +62,7 @@ export function ContestForm({ initial, isNew, onSave, ratedLocked = false }: Con
       if (Object.keys(fields).length > 0) {
         setErrors(fields);
         setFormError('The server rejected some fields.');
-      } else if (isApiError(error) && error.status === 409 && /slug/i.test(error.message)) {
+      } else if (isSlugConflict(error)) {
         setErrors({ slug: getErrorMessage(error) });
         setFormError('That slug is already used by another contest.');
       } else {

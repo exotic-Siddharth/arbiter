@@ -56,8 +56,9 @@ const DAY_SEC = 24 * 60 * 60;
 
 /**
  * Finished jobs are kept for the admin monitor, but never forever (age + count). A run job holds
- * the user's source code and input, so it follows the 10-minute result TTL (spec 8.6): removed
- * on completion, and a failed one (kept for its retries and the monitor) no longer than RUN_TTL_SEC.
+ * the user's source code and input, so it is removed as soon as it completes or fails for good
+ * (retries keep it; the failed handler reads job.data from the in-memory job). An age-based
+ * removeOnFail would not do: BullMQ only applies it when a later job fails into the same set.
  */
 const JOB_OPTIONS: Record<QueueName, JobsOptions> = {
   judge: {
@@ -68,7 +69,7 @@ const JOB_OPTIONS: Record<QueueName, JobsOptions> = {
   run: {
     ...RETRY_JOB_OPTIONS,
     removeOnComplete: true,
-    removeOnFail: { age: RUN_TTL_SEC, count: 100 },
+    removeOnFail: true,
   },
   plagiarism: {
     ...RETRY_JOB_OPTIONS,

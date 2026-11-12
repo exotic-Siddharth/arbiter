@@ -1004,3 +1004,8 @@ Internal module structure beyond §5, component APIs, exact copy and micro-inter
   - A-52 `judge-refs` logs in again on a 401 and stops polling on an unexpected status.
   - A-29, A-30 The SPA moves focus to the main region and announces the title on route changes; primary buttons rest on `#6a4af0` (hover `#5b3bdc`) and the light-theme semantic colours were darkened (`tokens.test.ts` enforces 4.5:1). This supersedes the S5 contrast note above.
   - A-31 The landing sandbox card lists the real `--cap-add` flags (SETUID, SETGID, KILL for the harness; the program runs with none) and the `/tmp` tmpfs.
+- 2026-11-12 (review, round 2) Fixes to the review fixes (ids refer to the "Fix review, round 2" table in docs/review/2026-11-11-review.md):
+  - A-R2-01 An ADMIN claim in the access token is re-checked against the database role on every authenticated request (`optionalAuth` and `requireAuth`), so a demotion applies at once (and a deleted user gets 401); a promotion applies at the next token refresh. Tokens that do not claim ADMIN cost no lookup.
+  - A-R2-02 `DELETE /api/admin/problems/:id` answers 409 for a problem that belongs to a rated contest; the check and the delete are one conditional statement.
+  - A-R2-03 A NUL in an `Id` or a contest-room slug is rejected by the shared zod schemas; a socket NUL that still reaches Postgres (22021) is acked as VALIDATION_ERROR and logged at debug level.
+  - A-R2-04 Migration `20261112120000_round2_indexes` adds `Submission(status, createdAt)` for the 60 s reconciler. A-R2-05 The plagiarism report reads stored pairs in pages up to the detail cap. A-R2-07 Failed run jobs are removed as soon as they fail for good (`removeOnFail: true`).

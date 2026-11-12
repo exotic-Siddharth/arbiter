@@ -25,7 +25,7 @@ function isBodyParserError(error: unknown): error is BodyParserError {
  * request carried a NUL. Prisma surfaces it as a known, unknown or raw-query error depending on
  * the call, hence the check on the Postgres code in the message and meta.
  */
-function isNulByteError(error: unknown): boolean {
+export function isNulByteError(error: unknown): boolean {
   if (
     !(error instanceof Prisma.PrismaClientKnownRequestError) &&
     !(error instanceof Prisma.PrismaClientUnknownRequestError)

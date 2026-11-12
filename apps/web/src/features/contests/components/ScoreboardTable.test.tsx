@@ -24,9 +24,9 @@ describe('ScoreboardTable', () => {
     );
     const mine = screen.getByRole('link', { name: 'bob' }).closest('tr')!;
     const other = screen.getByRole('link', { name: 'alice' }).closest('tr')!;
-    // The row tint is translucent; sticky rank/user cells must override it with an opaque mix.
-    expect(mine.className).toContain('[&>td.sticky]:bg-[color-mix(');
-    expect(mine.className).toContain('var(--color-surface)');
-    expect(other.className).not.toContain('color-mix');
+    // The row tint is translucent; sticky rank/user cells must override it with the opaque
+    // equivalent (its colour match is tested on the theme tokens in styles/tokens.test.ts).
+    expect(mine.className).toContain('[&>td.sticky]:bg-primary-soft-solid');
+    expect(other.className).not.toContain('primary-soft');
   });
 });

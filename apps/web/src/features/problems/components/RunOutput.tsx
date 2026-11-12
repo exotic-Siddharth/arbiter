@@ -24,13 +24,51 @@ export interface RunOutputProps {
   sample?: ProblemSample;
 }
 
+const PHASE_TEXT: Partial<Record<RunPhase, string>> = {
+  starting: 'Sending your code to the sandbox…',
+  running: 'Running on your input…',
+};
+
+/** The sample comparison of a finished run, if its input was a sample. */
+function compareSample(result: RunResult, sample: ProblemSample | undefined) {
+  const compared = sample && result.status === 'OK' ? sample : undefined;
+  const matches = compared
+    ? changedLines(outputLines(compared.expectedOutput), outputLines(result.stdout)).size === 0
+    : false;
+  return { compared, matches };
+}
+
+/** One line for screen readers: phase, or status label, time, memory and the sample match. */
+function runSummary({ phase, result, sample }: RunOutputProps): string {
+  const pending = PHASE_TEXT[phase];
+  if (pending) return pending;
+  // 'unavailable' is announced by its own alert.
+  if (phase !== 'done' || !result) return '';
+  const { compared, matches } = compareSample(result, sample);
+  const parts = [
+    RUN_STATUS[result.status].label,
+    formatMs(result.timeMs),
+    formatMemoryKb(result.memoryKb),
+  ];
+  if (compared) {
+    parts.push(
+      `${matches ? 'Matches' : 'Differs from'} the expected output of sample ${compared.ordinal}`,
+    );
+  }
+  return parts.join(' · ');
+}
+
 /** Output of a custom-input run (stdout, stderr, compile output, sample comparison). */
 export function RunOutput(props: RunOutputProps) {
-  // Always mounted, so screen readers hear the running state and then the outcome.
+  // The live region is always mounted and holds only a summary, so screen readers hear the
+  // running state and then the outcome, not the whole program output or diff.
   return (
-    <div role="status" aria-live="polite">
+    <>
+      <p role="status" aria-live="polite" className="sr-only">
+        {runSummary(props)}
+      </p>
       <RunOutputBody {...props} />
-    </div>
+    </>
   );
 }
 
@@ -39,7 +77,7 @@ function RunOutputBody({ phase, result, sample }: RunOutputProps) {
     return (
       <div className="flex items-center gap-2.5 py-2 text-sm text-muted">
         <Spinner size="sm" />
-        {phase === 'starting' ? 'Sending your code to the sandbox…' : 'Running on your input…'}
+        {PHASE_TEXT[phase]}
       </div>
     );
   }
@@ -64,10 +102,7 @@ function RunOutputBody({ phase, result, sample }: RunOutputProps) {
 
   const info = RUN_STATUS[result.status];
   const color = `var(--color-${info.token})`;
-  const compared = sample && result.status === 'OK' ? sample : undefined;
-  const matches = compared
-    ? changedLines(outputLines(compared.expectedOutput), outputLines(result.stdout)).size === 0
-    : false;
+  const { compared, matches } = compareSample(result, sample);
 
   return (
     <div className="space-y-4">

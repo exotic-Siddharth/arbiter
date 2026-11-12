@@ -54,8 +54,15 @@ export const IsoDateTime = z.string().datetime({ offset: true });
 /** UTC calendar day, "YYYY-MM-DD". */
 export const DateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
 
+/** Postgres text cannot hold U+0000; reject it at the zod level instead of as a database error. */
+export const hasNul = (value: string) => value.includes(String.fromCharCode(0));
+
 /** Database id (cuid). Kept lenient so unknown ids give 404, not 400. */
-export const Id = z.string().min(1).max(64);
+export const Id = z
+  .string()
+  .min(1)
+  .max(64)
+  .refine((value) => !hasNul(value), 'Must not contain NUL characters');
 
 export const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

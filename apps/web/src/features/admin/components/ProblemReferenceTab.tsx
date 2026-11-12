@@ -6,7 +6,7 @@ import {
   type Language,
 } from '@arbiter/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CodeEditor } from '@/components/CodeEditor';
 import { Alert, Button, Card, CardContent, CardHeader, Select } from '@/components/ui';
 import { api, getErrorMessage, isApiError } from '@/lib/api';
@@ -17,8 +17,18 @@ import { GeneratePanel, ValidatePanel } from './ReferencePanels';
 
 const LANGUAGE_OPTIONS = LANGUAGE_IDS.map((id) => ({ value: id, label: LANGUAGES[id].label }));
 
-/** Reference tab: Monaco for the reference solution, then Validate and Generate outputs. */
-export function ProblemReferenceTab({ problem }: { problem: AdminProblem }) {
+/**
+ * Reference tab: Monaco for the reference solution, then Validate and Generate outputs. Kept
+ * mounted across refetches: unsaved code is compared with the latest saved `problem`.
+ */
+export function ProblemReferenceTab({
+  problem,
+  onDirtyChange,
+}: {
+  problem: AdminProblem;
+  /** Reports unsaved code; the page renders the one unsaved-changes guard. */
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const queryClient = useQueryClient();
   const savedLanguage: Language = problem.referenceLanguage ?? 'CPP';
   const savedSource = problem.referenceSolution ?? '';
@@ -30,6 +40,9 @@ export function ProblemReferenceTab({ problem }: { problem: AdminProblem }) {
     problem.referenceSolution !== null && problem.referenceSolution.trim() !== '';
   const dirty =
     language !== savedLanguage || source !== (savedSource || LANGUAGES[savedLanguage].template);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
   // A template that was never saved is not a reference solution.
   const unsavedTemplate = !hasReference;
 

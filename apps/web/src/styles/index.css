@@ -31,7 +31,9 @@
   --color-primary: #6a4af0;
   --color-primary-hover: #5b3bdc;
   --color-on-primary: #ffffff;
-  --color-primary-soft: rgb(124 92 255 / 0.1);
+  --color-primary-soft: rgb(106 74 240 / 0.1);
+  /* primary-soft composited over surface: opaque, for sticky cells of a tinted row. */
+  --color-primary-soft-solid: #f0edfe;
   --color-primary-text: #5b3bdc;
   --color-accent: #155e75;
   --color-ring: #7c5cff;
@@ -83,7 +85,8 @@
   --color-primary: #6a4af0;
   --color-primary-hover: #5b3bdc;
   --color-on-primary: #ffffff;
-  --color-primary-soft: rgb(124 92 255 / 0.16);
+  --color-primary-soft: rgb(106 74 240 / 0.16);
+  --color-primary-soft-solid: #201d3e;
   --color-primary-text: #a594ff;
   --color-accent: #22d3ee;
   --color-ring: #7c5cff;
@@ -137,6 +140,7 @@
   --color-primary-hover: var(--color-primary-hover);
   --color-on-primary: var(--color-on-primary);
   --color-primary-soft: var(--color-primary-soft);
+  --color-primary-soft-solid: var(--color-primary-soft-solid);
   --color-primary-text: var(--color-primary-text);
   --color-accent: var(--color-accent);
   --color-ring: var(--color-ring);

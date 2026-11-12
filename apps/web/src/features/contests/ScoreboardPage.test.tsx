@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react';
+import { LIMITS } from '@arbiter/shared';
 import { describe, expect, it } from 'vitest';
 import { setSocketForTesting } from '@/lib/socket';
 import { createFakeSocket } from '@/test/fakeSocket';
@@ -24,6 +25,25 @@ describe('ScoreboardPage ?page=', () => {
       expect(await screen.findByRole('link', { name: 'alice' })).toBeInTheDocument();
       const board = api.requests.find((request) => request.path.endsWith('/scoreboard'));
       expect(board?.query.get('page')).toBe('1');
+    },
+  );
+
+  it.each(['5000000', '1e300'])(
+    'asks the API for its highest page when ?page=%s is above it (A-R2-17)',
+    async (raw) => {
+      setSocketForTesting(createFakeSocket().socket);
+      const api = mockFetch({
+        'GET /api/contests/autumn-sprint': () => jsonResponse(200, contestDetail(Date.now())),
+        'GET /api/contests/autumn-sprint/scoreboard': () =>
+          jsonResponse(200, scoreboard([scoreRow('alice', 2, 100, 1)])),
+      });
+      renderWithProviders(<ScoreboardPage />, {
+        route: `/contests/autumn-sprint/scoreboard?page=${raw}`,
+        path: '/contests/:slug/scoreboard',
+      });
+      await screen.findByRole('link', { name: 'alice' });
+      const board = api.requests.find((request) => request.path.endsWith('/scoreboard'));
+      expect(board?.query.get('page')).toBe(String(LIMITS.pageMax));
     },
   );
 

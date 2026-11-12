@@ -141,9 +141,9 @@ export function ScoreboardTable({
                 className={cn(
                   'group',
                   row.movement !== null && 'animate-highlight',
-                  // Sticky cells need an opaque tint, or cells scrolling under them show through.
-                  mine &&
-                    '[&>td]:bg-primary-soft [&>td.sticky]:bg-[color-mix(in_oklab,var(--color-primary)_12%,var(--color-surface))]',
+                  // Sticky cells need an opaque tint, or cells scrolling under them show through;
+                  // primary-soft-solid is the same tint composited over the surface.
+                  mine && '[&>td]:bg-primary-soft [&>td.sticky]:bg-primary-soft-solid',
                 )}
               >
                 <td

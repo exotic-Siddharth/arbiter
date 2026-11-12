@@ -5,6 +5,7 @@ import { hashPassword } from '../lib/password';
 import { getRedis } from '../lib/redis';
 import { clock } from '../lib/time';
 import { rateContest } from '../modules/contests/admin';
+import { scoreboardKeys } from '../modules/contests/scoreboard';
 import { runPlagiarismReport } from '../modules/plagiarism/service';
 import {
   assertHiddenTests,
@@ -210,32 +211,28 @@ function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) : text;
 }
 
-const SCOREBOARD_KEY = /^contest:[^:]+:(rank|rows|updatedAt|lock)$/;
-
 /**
- * The seed ids are deterministic, so a scoreboard cache left over from an earlier seed would
- * resurface for the new rows. Deletes contest:<id>:{rank,rows,updatedAt,lock} only (the same
- * Redis holds BullMQ and Socket.IO keys, so no FLUSHDB).
+ * Deletes contest:<id>:{rank,rows,updatedAt,lock} of exactly these contests. No SCAN over the
+ * whole Redis DB: it is shared with BullMQ, Socket.IO and, in tests, other test processes whose
+ * contests must keep their caches and rebuild locks.
  */
-export async function clearScoreboardCaches(): Promise<void> {
-  const redis = getRedis();
-  let cursor = '0';
-  do {
-    const [next, keys] = await redis.scan(cursor, 'MATCH', 'contest:*', 'COUNT', 500);
-    cursor = next;
-    const stale = keys.filter((key) => SCOREBOARD_KEY.test(key));
-    if (stale.length > 0) await redis.del(...stale);
-  } while (cursor !== '0');
+export async function clearScoreboardCaches(contestIds: readonly string[]): Promise<void> {
+  const keys = contestIds.flatMap((id) => Object.values(scoreboardKeys(id)));
+  if (keys.length > 0) await getRedis().del(...keys);
 }
 
-/** Wipes every application table (never the migration history) and the scoreboard caches. */
+/**
+ * Wipes every application table (never the migration history) and the scoreboard caches of the
+ * contests it removes (their ids are read before the TRUNCATE).
+ */
 async function wipe(): Promise<void> {
+  const replaced = await prisma.contest.findMany({ select: { id: true } });
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE "PlagiarismPair", "PlagiarismReport", "AdminJob", "RatingChange", ' +
       '"SubmissionTestResult", "Submission", "ContestRegistration", "ContestProblem", "Contest", ' +
       '"ProblemTag", "Tag", "TestCase", "Problem", "RefreshToken", "User" RESTART IDENTITY CASCADE',
   );
-  await clearScoreboardCaches();
+  await clearScoreboardCaches(replaced.map((contest) => contest.id));
 }
 
 async function insertInChunks<T>(
@@ -481,6 +478,9 @@ export async function runSeed(log: (line: string) => void = console.log): Promis
   for (const plan of plans) {
     const id = cuidLike(rng);
     contestId.set(plan.slug, id);
+    // The seed ids are deterministic: drop a cache an earlier seed left for this id (e.g. the
+    // database was reset but Redis was not).
+    await clearScoreboardCaches([id]);
     await prisma.contest.create({
       data: {
         id,

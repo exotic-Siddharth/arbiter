@@ -10,6 +10,7 @@ import { QueryState } from '@/components/ui/QueryState';
 import { TableSkeleton } from '@/components/ui/Table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { api } from '@/lib/api';
+import { parsePageParam } from '@/lib/page';
 import { qk } from '@/lib/queryKeys';
 import { useClampPage } from '@/lib/useClampPage';
 import { useCurrentUser } from '@/stores/auth';
@@ -26,7 +27,7 @@ const DESCRIPTIONS: Record<Ordering, string> = {
 export function Component() {
   const [params, setParams] = useSearchParams();
   const by: Ordering = params.get('by') === 'solved' ? 'solved' : 'rating';
-  const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
+  const page = parsePageParam(params.get('page'));
   const user = useCurrentUser();
 
   const query = useQuery({

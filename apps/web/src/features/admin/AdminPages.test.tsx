@@ -1,9 +1,11 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { LIMITS } from '@arbiter/shared';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiError, jsonResponse, mockFetch } from '@/test/fetchMock';
 import { renderWithProviders } from '@/test/render';
 import { RatingsCard } from './components/ContestActions';
+import { ExistingContest } from './components/ContestEditor';
 import { niceMax } from './lib/chartScale';
 import { Component as AdminUsersPage } from './AdminUsersPage';
 import { Component as JudgeMonitorPage } from './JudgeMonitorPage';
@@ -94,6 +96,21 @@ describe('AdminUsersPage', () => {
     // The signed-in admin cannot demote themselves.
     expect(screen.getByRole('button', { name: /Remove admin for root/ })).toBeDisabled();
   }, 20_000);
+
+  it('clamps ?page above the API maximum (A-R2-17)', async () => {
+    const api = mockFetch({
+      'GET /api/admin/users': ({ query }) =>
+        Number(query.get('page')) > LIMITS.pageMax
+          ? apiError(400, 'VALIDATION', 'page too large')
+          : jsonResponse(200, { items: [], total: 0, page: 1, pageSize: 25 }),
+    });
+    renderWithProviders(<AdminUsersPage />, {
+      route: '/admin/users?page=2000000',
+      user: adminUser,
+    });
+    expect(await screen.findByText('No users match')).toBeInTheDocument();
+    expect(api.requests[0]?.query.get('page')).toBe(String(LIMITS.pageMax));
+  });
 
   it('sends the search text to the API', async () => {
     const api = mockFetch({
@@ -191,6 +208,36 @@ describe('RatingsCard', () => {
     });
     expect(screen.getByRole('button', { name: 'Apply ratings' })).toBeDisabled();
     expect(screen.getByText(/3 submissions are still being judged/)).toBeInTheDocument();
+  });
+
+  describe('in the contest editor (A-R2-14)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('re-reads the contest while submissions are judged and enables itself afterwards', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      let pending = 3;
+      const api = mockFetch({
+        'GET /api/admin/contests/c_1': () =>
+          jsonResponse(200, adminContest({ pendingSubmissions: pending })),
+      });
+      renderWithProviders(<ExistingContest id="c_1" />, { user: adminUser });
+      expect(await screen.findByText(/3 submissions are still being judged/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Apply ratings' })).toBeDisabled();
+
+      pending = 0;
+      await act(() => vi.advanceTimersByTimeAsync(5_000));
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Apply ratings' })).toBeEnabled(),
+      );
+      const reads = api.requests.length;
+      expect(reads).toBeGreaterThanOrEqual(2);
+
+      // Nothing left to judge: polling stops.
+      await act(() => vi.advanceTimersByTimeAsync(15_000));
+      expect(api.requests).toHaveLength(reads);
+    });
   });
 
   it('explains a 409 from the server', async () => {

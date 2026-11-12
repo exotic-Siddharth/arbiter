@@ -109,7 +109,7 @@ route(
     tags: ['Admin: problems'],
     auth: 'admin',
     request: { params: IdParams },
-    responses: { 204: null, 404: 'Problem not found' },
+    responses: { 204: null, 404: 'Problem not found', 409: 'The problem is in a rated contest' },
   },
   async (req, res) => {
     await deleteAdminProblem(getDeps(req).prisma, req.params.id);

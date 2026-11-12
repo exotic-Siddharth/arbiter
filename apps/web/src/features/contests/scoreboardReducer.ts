@@ -128,20 +128,12 @@ function applyRow(state: ScoreboardState, row: ScoreRow, at: number): Scoreboard
   const index = state.rows.findIndex((r) => userKey(r.username) === userKey(row.username));
   let stale = state.stale;
   let working: LiveScoreRow[];
+  let worsened = false;
 
   if (index >= 0) {
     working = state.rows.slice();
     const current = state.rows[index] as LiveScoreRow;
-    // A row that worsened and stays last on a full page may now rank behind the next page's
-    // first row, which is not loaded here.
-    const lastOnFullPage = index === state.rows.length - 1 && state.rows.length >= state.pageSize;
-    if (
-      lastOnFullPage &&
-      compareScore(row, current) > 0 &&
-      state.total > state.page * state.pageSize
-    ) {
-      stale = true;
-    }
+    worsened = compareScore(row, current) > 0;
     // Keep the current markers; the rank comparison below sets new ones if the row moves.
     working[index] = {
       ...row,
@@ -162,6 +154,16 @@ function applyRow(state: ScoreboardState, row: ScoreRow, at: number): Scoreboard
   }
 
   working.sort(compareScore); // stable: ties keep their order
+  // A row that worsened and ends up last on a full page (wherever it started) may now rank
+  // behind the next page's first row, which is not loaded here.
+  if (
+    worsened &&
+    working.length >= state.pageSize &&
+    state.total > state.page * state.pageSize &&
+    userKey(working[working.length - 1]?.username ?? '') === userKey(row.username)
+  ) {
+    stale = true;
+  }
   if (working.length > state.pageSize) {
     working = working.slice(0, state.pageSize);
     stale = true;

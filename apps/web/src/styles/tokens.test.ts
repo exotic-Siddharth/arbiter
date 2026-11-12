@@ -76,3 +76,32 @@ describe.each([
     }
   });
 });
+
+/** `--color-<name>: rgb(r g b / a);` in the given block, as [rgb, alpha]. */
+function rgbaToken(selector: string, name: string): [Rgb, number] {
+  const start = css.indexOf(`${selector} {`);
+  const body = css.slice(start, css.indexOf('\n}', start));
+  const m = new RegExp(String.raw`--color-${name}:\s*rgb\((\d+) (\d+) (\d+) / ([\d.]+)\)\s*;`).exec(
+    body,
+  );
+  expect(m, `--color-${name} in ${selector}`).not.toBeNull();
+  return [[Number(m![1]), Number(m![2]), Number(m![3])], Number(m![4])];
+}
+
+describe.each([
+  ['light', ':root'],
+  ['dark', '.dark'],
+])('%s theme own-row tint (A-R2-16)', (_name, selector) => {
+  const t = tokens(selector);
+  const [soft, alpha] = rgbaToken(selector, 'primary-soft');
+
+  it('the soft tint uses the current primary hue', () => {
+    expect(soft).toEqual(rgb(t['primary']!));
+  });
+
+  it('the opaque sticky tint equals the soft tint composited over the surface', () => {
+    const composited = blend(soft, rgb(t['surface']!), alpha);
+    const solid = rgb(t['primary-soft-solid']!);
+    solid.forEach((c, i) => expect(Math.abs(c - composited[i]!)).toBeLessThanOrEqual(1));
+  });
+});

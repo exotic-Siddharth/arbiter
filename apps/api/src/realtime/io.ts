@@ -17,6 +17,7 @@ import { verifyAccessToken } from '../lib/jwt';
 import { logger } from '../lib/logger';
 import { createRedisConnection } from '../lib/redis';
 import type { AuthUser } from '../middleware/auth';
+import { isNulByteError } from '../middleware/error';
 import { rooms } from './rooms';
 
 export interface SocketData {
@@ -100,6 +101,12 @@ async function isCurrentAdmin(prisma: PrismaClient, user: AuthUser | undefined):
 
 function registerRoomHandlers(socket: ArbiterSocket, prisma: PrismaClient): void {
   const fail = (ack: AckCallback, where: string, error: unknown) => {
+    // A NUL in an id or slug passes zod but Postgres rejects it (22021): a client error, as in HTTP.
+    if (isNulByteError(error)) {
+      logger.debug({ event: where, socketId: socket.id }, 'socket payload contained a NUL');
+      ack({ ok: false, error: 'VALIDATION_ERROR' });
+      return;
+    }
     logger.error({ err: error, event: where, socketId: socket.id }, 'socket handler failed');
     ack({ ok: false, error: 'INTERNAL' });
   };

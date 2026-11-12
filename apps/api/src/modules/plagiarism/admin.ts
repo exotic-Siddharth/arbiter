@@ -100,36 +100,44 @@ export async function getPlagiarismReport(
   const row = await prisma.plagiarismReport.findUnique({ where: { id }, include: summaryInclude });
   if (!row) throw notFound('Report not found');
 
-  // Light rows for every pair; sources and matched lines are loaded for the capped set only.
-  const allPairs = await prisma.plagiarismPair.findMany({
-    where: { reportId: id },
-    orderBy: [{ similarity: 'desc' }, { id: 'asc' }],
-    select: { id: true, problemId: true, submissionAId: true, submissionBId: true },
-  });
-  const [existingSubmissions, existingProblems] = await Promise.all([
-    prisma.submission.findMany({
-      where: {
-        id: { in: [...new Set(allPairs.flatMap((p) => [p.submissionAId, p.submissionBId]))] },
-      },
-      select: { id: true },
-    }),
-    prisma.problem.findMany({
-      where: { id: { in: [...new Set(allPairs.map((p) => p.problemId))] } },
-      select: { id: true },
-    }),
-  ]);
-  const submissionIds = new Set(existingSubmissions.map((s) => s.id));
-  const problemIds = new Set(existingProblems.map((p) => p.id));
-  // Pairs whose submissions or problem were deleted since the run are left out, before the cap.
-  const keptIds = allPairs
-    .filter(
-      (p) =>
+  // Light rows, read in ordered pages of MAX_DETAIL_PAIRS: pairs whose submissions or problem were
+  // deleted since the run are left out before the cap, and another page is read only while they
+  // leave fewer than MAX_DETAIL_PAIRS kept. Sources and matched lines are loaded for the kept set.
+  const keptIds: string[] = [];
+  for (let skip = 0; keptIds.length < MAX_DETAIL_PAIRS; skip += MAX_DETAIL_PAIRS) {
+    const page = await prisma.plagiarismPair.findMany({
+      where: { reportId: id },
+      orderBy: [{ similarity: 'desc' }, { id: 'asc' }],
+      select: { id: true, problemId: true, submissionAId: true, submissionBId: true },
+      skip,
+      take: MAX_DETAIL_PAIRS,
+    });
+    const [existingSubmissions, existingProblems] = await Promise.all([
+      prisma.submission.findMany({
+        where: {
+          id: { in: [...new Set(page.flatMap((p) => [p.submissionAId, p.submissionBId]))] },
+        },
+        select: { id: true },
+      }),
+      prisma.problem.findMany({
+        where: { id: { in: [...new Set(page.map((p) => p.problemId))] } },
+        select: { id: true },
+      }),
+    ]);
+    const submissionIds = new Set(existingSubmissions.map((s) => s.id));
+    const problemIds = new Set(existingProblems.map((p) => p.id));
+    for (const p of page) {
+      if (
+        keptIds.length < MAX_DETAIL_PAIRS &&
         submissionIds.has(p.submissionAId) &&
         submissionIds.has(p.submissionBId) &&
-        problemIds.has(p.problemId),
-    )
-    .slice(0, MAX_DETAIL_PAIRS)
-    .map((p) => p.id);
+        problemIds.has(p.problemId)
+      ) {
+        keptIds.push(p.id);
+      }
+    }
+    if (page.length < MAX_DETAIL_PAIRS) break;
+  }
 
   const rows = await prisma.plagiarismPair.findMany({
     where: { id: { in: keptIds } },

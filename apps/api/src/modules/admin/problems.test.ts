@@ -312,6 +312,30 @@ describe('admin problem CRUD', () => {
     expect(res.status).toBe(204);
     expect(await getRedis().exists(keys.rank, keys.rows)).toBe(0);
   });
+
+  it('DELETE refuses (409) a problem of a rated contest and keeps its link and submissions', async () => {
+    const problem = await createProblem(prisma);
+    const player = await createUser(prisma);
+    const contest = await createContest(prisma, {
+      startsAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      endsAt: new Date(Date.now() - 60 * 60 * 1000),
+      ratedAt: new Date(),
+      problems: [{ problemId: problem.id, label: 'A' }],
+      registrations: [player.id],
+    });
+    await createSubmission(prisma, {
+      userId: player.id,
+      problemId: problem.id,
+      contestId: contest.id,
+      status: 'DONE',
+      verdict: 'AC',
+    });
+    const res = await request(app).delete(`/api/admin/problems/${problem.id}`).set(asAdmin());
+    expect(res.status).toBe(409);
+    expect(await prisma.problem.count({ where: { id: problem.id } })).toBe(1);
+    expect(await prisma.contestProblem.count({ where: { contestId: contest.id } })).toBe(1);
+    expect(await prisma.submission.count({ where: { contestId: contest.id } })).toBe(1);
+  });
 });
 
 describe('admin test-case CRUD', () => {

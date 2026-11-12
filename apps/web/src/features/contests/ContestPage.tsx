@@ -21,7 +21,7 @@ import { ContestSubmissions } from './components/ContestSubmissions';
 import { LiveScoreboard } from './components/LiveScoreboard';
 import { RegisterButton } from './components/RegisterButton';
 import { useContest } from './hooks/useContest';
-import { parsePageParam } from './lib/page';
+import { parsePageParam } from '@/lib/page';
 
 type Tab = 'problems' | 'scoreboard' | 'submissions';
 
