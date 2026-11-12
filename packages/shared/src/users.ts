@@ -2,10 +2,12 @@ import { z } from 'zod';
 import {
   DateKey,
   DifficultySchema,
+  isPgText,
   IsoDateTime,
   LanguageSchema,
   NonNegativeInt,
   PageQuery,
+  PG_TEXT_MESSAGE,
   pageSchema,
 } from './common';
 import { LIMITS } from './constants';
@@ -16,6 +18,7 @@ export const PatchMeBody = z.object({
     .string()
     .trim()
     .max(LIMITS.bioMaxChars, `Bio must be at most ${LIMITS.bioMaxChars} characters`)
+    .refine(isPgText, PG_TEXT_MESSAGE)
     .nullable(),
 });
 export type PatchMeBody = z.infer<typeof PatchMeBody>;

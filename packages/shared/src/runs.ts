@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import {
+  isPgText,
   LanguageSchema,
   NonNegativeInt,
+  PG_TEXT_MESSAGE,
   RunInputSchema,
   RunStatusSchema,
   SourceCodeSchema,
@@ -26,7 +28,7 @@ export const CreateRunBody = z.object({
   language: LanguageSchema,
   sourceCode: SourceCodeSchema,
   input: RunInputSchema,
-  problemSlug: z.string().min(1).max(100).optional(),
+  problemSlug: z.string().min(1).max(100).refine(isPgText, PG_TEXT_MESSAGE).optional(),
 });
 export type CreateRunBody = z.infer<typeof CreateRunBody>;
 

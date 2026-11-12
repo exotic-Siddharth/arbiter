@@ -33,7 +33,28 @@ export function isNulByteError(error: unknown): boolean {
     return false;
   }
   const meta = JSON.stringify((error as { meta?: unknown }).meta ?? {});
-  return /22021|invalid byte sequence for encoding "UTF8": 0x00/.test(`${error.message} ${meta}`);
+  return /22021|invalid byte sequence for encoding "UTF8"/.test(`${error.message} ${meta}`);
+}
+
+/**
+ * Text the database cannot take: a NUL (22021 above) or ill-formed UTF-16 (a lone surrogate has no
+ * UTF-8 form; Prisma's query engine rejects the encoded query as InvalidArg, "unexpected end of hex
+ * escape"). zod rejects both first (isPgText); this is the net for any string that slips past it.
+ */
+export function isInvalidTextError(error: unknown): boolean {
+  if (isNulByteError(error)) return true;
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) &&
+    !(error instanceof Prisma.PrismaClientUnknownRequestError)
+  ) {
+    return false;
+  }
+  return /hex escape|surrogate/i.test(error.message);
+}
+
+/** Express decodes path params with decodeURIComponent: invalid UTF-8 (e.g. %ED%A0%80) throws. */
+function isUndecodableParam(error: unknown): boolean {
+  return error instanceof URIError && (error as { status?: unknown }).status === 400;
 }
 
 /** Maps anything thrown by a handler to an AppError. */
@@ -51,7 +72,10 @@ export function toAppError(error: unknown): AppError {
       return badRequest('Unreadable request body');
     }
   }
-  if (isNulByteError(error)) return badRequest('Text must not contain NUL characters');
+  if (isUndecodableParam(error)) return badRequest('Malformed URL: a path segment is not UTF-8');
+  if (isInvalidTextError(error)) {
+    return badRequest('Text must not contain NUL characters or unpaired surrogates');
+  }
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     // Unique constraint violation and "record to update/delete not found".
     if (error.code === 'P2002') {

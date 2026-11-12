@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import {
   Id,
-  hasNul,
+  isPgText,
   IsoDateTime,
   LanguageSchema,
   NonNegativeInt,
+  PG_TEXT_MESSAGE,
   SubmissionStatusSchema,
   VerdictSchema,
 } from './common';
@@ -100,11 +101,7 @@ export type SubmissionRoomPayload = z.infer<typeof SubmissionRoomPayload>;
 
 /** contest:subscribe / contest:unsubscribe (joins contest:<contestId>). */
 export const ContestRoomPayload = z.object({
-  slug: z
-    .string()
-    .min(1)
-    .max(100)
-    .refine((value) => !hasNul(value), 'Must not contain NUL characters'),
+  slug: z.string().min(1).max(100).refine(isPgText, PG_TEXT_MESSAGE),
 });
 export type ContestRoomPayload = z.infer<typeof ContestRoomPayload>;
 

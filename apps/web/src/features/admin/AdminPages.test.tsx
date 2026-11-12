@@ -238,6 +238,39 @@ describe('RatingsCard', () => {
       await act(() => vi.advanceTimersByTimeAsync(15_000));
       expect(api.requests).toHaveLength(reads);
     });
+
+    it('re-reads the contest at its end, so Apply ratings enables itself (A-R3-06)', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const startsAt = new Date(Date.now() - 60 * 60_000).toISOString();
+      const endsAt = new Date(Date.now() + 10_000).toISOString();
+      const api = mockFetch({
+        'GET /api/admin/contests/c_1': () =>
+          jsonResponse(
+            200,
+            adminContest({
+              startsAt,
+              endsAt,
+              status: Date.now() < Date.parse(endsAt) ? 'RUNNING' : 'ENDED',
+              pendingSubmissions: 0,
+            }),
+          ),
+      });
+      renderWithProviders(<ExistingContest id="c_1" />, { user: adminUser });
+      expect(await screen.findByText(/it is running now/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Apply ratings' })).toBeDisabled();
+
+      await act(() => vi.advanceTimersByTimeAsync(15_000));
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Apply ratings' })).toBeEnabled(),
+      );
+      expect(screen.queryByText(/it is running now/)).not.toBeInTheDocument();
+      const reads = api.requests.length;
+      expect(reads).toBe(2);
+
+      // Ended and nothing to judge: no further polling.
+      await act(() => vi.advanceTimersByTimeAsync(60_000));
+      expect(api.requests).toHaveLength(reads);
+    });
   });
 
   it('explains a 409 from the server', async () => {

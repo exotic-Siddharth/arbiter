@@ -1,13 +1,14 @@
 import { ScoreboardSchema } from '@arbiter/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Trophy } from 'lucide-react';
-import { useEffect, useLayoutEffect, useReducer } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useReducer } from 'react';
 import { LiveIndicator, TimeAgo } from '@/components';
 import { Card, EmptyState, ErrorState, Pagination, TableSkeleton } from '@/components/ui';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { qk } from '@/lib/queryKeys';
 import { useRoom, useSocketEvent } from '@/lib/socket';
+import { useClampPage } from '@/lib/useClampPage';
 import { useCurrentUser } from '@/stores/auth';
 import { MINUS, STAR } from '../lib/scoreCell';
 import { initialScoreboardState, scoreboardReducer } from '../scoreboardReducer';
@@ -22,7 +23,8 @@ export interface LiveScoreboardProps {
   slug: string;
   page: number;
   pageSize?: number;
-  onPageChange: (page: number) => void;
+  /** `replace` is set when a page past the end moves to the last page (no new history entry). */
+  onPageChange: (page: number, options?: { replace?: boolean }) => void;
   /** Classes of the table's scroll container (e.g. max-h for the sticky header). */
   tableClassName?: string;
   /** No contest submissions are possible yet (before the start). */
@@ -84,6 +86,15 @@ export function LiveScoreboard({
     placeholderData: keepPreviousData,
   });
   const { refetch } = query;
+  const board = query.data;
+  const clampable = useMemo(
+    () =>
+      board
+        ? { items: board.rows, total: board.total, page: board.page, pageSize: board.pageSize }
+        : undefined,
+    [board],
+  );
+  useClampPage(clampable, query.isPlaceholderData, (last) => onPageChange(last, { replace: true }));
 
   useRoom('contest:subscribe', { slug }, { invalidate: [qk.contests.scoreboard(slug)] });
 
@@ -155,7 +166,7 @@ export function LiveScoreboard({
   return (
     <Card className="overflow-hidden">
       {header}
-      {rows.length === 0 ? (
+      {rows.length === 0 && state.total === 0 ? (
         <EmptyState
           icon={<Trophy />}
           title={notStarted ? 'The scoreboard opens at the start' : 'No submissions yet'}

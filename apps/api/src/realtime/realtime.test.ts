@@ -356,6 +356,26 @@ describe('realtime', () => {
     }
   });
 
+  it('a lone surrogate in a subscribe id or slug acks VALIDATION_ERROR and logs no error', async () => {
+    const lone = String.fromCharCode(0xd800);
+    const user = await createUser(prisma);
+    const guest = open();
+    const member = open(signAccessToken(user));
+    await Promise.all([connected(guest), connected(member)]);
+    const errorLog = vi.spyOn(logger, 'error');
+    try {
+      expect(
+        await ackOf((ack) => guest.emit('contest:subscribe', { slug: `x${lone}` }, ack)),
+      ).toEqual({ ok: false, error: 'VALIDATION_ERROR' });
+      expect(
+        await ackOf((ack) => member.emit('submission:subscribe', { id: `x${lone}` }, ack)),
+      ).toEqual({ ok: false, error: 'VALIDATION_ERROR' });
+      expect(errorLog).not.toHaveBeenCalled();
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
   it('the emitter rejects payloads that do not match the shared schema', () => {
     expect(() =>
       emitter.emitSubmissionStatus({

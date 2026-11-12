@@ -4,11 +4,13 @@ import {
   ContestStatusSchema,
   DifficultySchema,
   Id,
+  isPgText,
   IsoDateTime,
   JobStatusSchema,
   LanguageSchema,
   NonNegativeInt,
   PageQuery,
+  PG_TEXT_MESSAGE,
   RoleSchema,
   SlugSchema,
   SourceCodeSchema,
@@ -26,8 +28,8 @@ import { LIMITS } from './constants';
 export const AdminProblemBody = z
   .object({
     slug: SlugSchema,
-    title: z.string().trim().min(1).max(120),
-    statementMd: z.string().min(1).max(100_000),
+    title: z.string().trim().min(1).max(120).refine(isPgText, PG_TEXT_MESSAGE),
+    statementMd: z.string().min(1).max(100_000).refine(isPgText, PG_TEXT_MESSAGE),
     difficulty: DifficultySchema,
     timeLimitMs: z.number().int().min(100).max(10_000),
     memoryLimitMb: z.number().int().min(16).max(1024),
@@ -35,7 +37,10 @@ export const AdminProblemBody = z
     /** Required when checker = FLOAT (absolute OR relative tolerance, e.g. 1e-6). */
     floatTolerance: z.number().positive().max(1).nullable().optional(),
     isPublished: z.boolean().default(false),
-    tags: z.array(z.string().trim().min(1).max(40)).max(10).default([]),
+    tags: z
+      .array(z.string().trim().min(1).max(40).refine(isPgText, PG_TEXT_MESSAGE))
+      .max(10)
+      .default([]),
     referenceLanguage: LanguageSchema.nullable().optional(),
     referenceSolution: SourceCodeSchema.nullable().optional(),
   })
@@ -106,7 +111,12 @@ export type AdminProblemPage = z.infer<typeof AdminProblemPageSchema>;
 // Test cases: /api/admin/problems/:id/tests (JSON body limit 20 MB on these routes)
 // ---------------------------------------------------------------------------
 
-const TestExplanationSchema = z.string().max(20_000).nullable().optional();
+const TestExplanationSchema = z
+  .string()
+  .max(20_000)
+  .refine(isPgText, PG_TEXT_MESSAGE)
+  .nullable()
+  .optional();
 
 /** POST /api/admin/problems/:id/tests and PUT /api/admin/problems/:id/tests/:testId */
 export const AdminTestBody = z.object({
@@ -251,8 +261,8 @@ const CONTEST_MAX_MS = LIMITS.contestMaxDays * 24 * 60 * 60 * 1000;
 export const AdminContestBody = z
   .object({
     slug: SlugSchema,
-    title: z.string().trim().min(1).max(120),
-    descriptionMd: z.string().max(50_000).default(''),
+    title: z.string().trim().min(1).max(120).refine(isPgText, PG_TEXT_MESSAGE),
+    descriptionMd: z.string().max(50_000).refine(isPgText, PG_TEXT_MESSAGE).default(''),
     startsAt: IsoDateTime,
     endsAt: IsoDateTime,
     isPublished: z.boolean().default(false),

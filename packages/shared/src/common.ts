@@ -57,12 +57,19 @@ export const DateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM
 /** Postgres text cannot hold U+0000; reject it at the zod level instead of as a database error. */
 export const hasNul = (value: string) => value.includes(String.fromCharCode(0));
 
+/** String.prototype.isWellFormed (ES2024, Node 20+, current browsers); the ES2023 lib lacks its type. */
+const isWellFormed = (value: string) =>
+  (value as string & { isWellFormed(): boolean }).isWellFormed();
+
+/**
+ * Text Postgres can store: no U+0000 and well-formed UTF-16. A lone surrogate has no UTF-8 form,
+ * so Prisma would reject the query; every input string reaching the database is refined with this.
+ */
+export const isPgText = (value: string) => !hasNul(value) && isWellFormed(value);
+export const PG_TEXT_MESSAGE = 'Must not contain NUL characters or unpaired surrogates';
+
 /** Database id (cuid). Kept lenient so unknown ids give 404, not 400. */
-export const Id = z
-  .string()
-  .min(1)
-  .max(64)
-  .refine((value) => !hasNul(value), 'Must not contain NUL characters');
+export const Id = z.string().min(1).max(64).refine(isPgText, PG_TEXT_MESSAGE);
 
 export const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -96,9 +103,11 @@ function formatLimit(bytes: number): string {
  */
 export function stringWithMaxBytes(maxBytes: number, label: string, minChars = 0) {
   const base = minChars > 0 ? z.string().min(minChars, `${label} is required`) : z.string();
-  return base.refine((value) => utf8ByteLength(value) <= maxBytes, {
-    message: `${label} must be at most ${formatLimit(maxBytes)} (UTF-8)`,
-  });
+  return base
+    .refine((value) => utf8ByteLength(value) <= maxBytes, {
+      message: `${label} must be at most ${formatLimit(maxBytes)} (UTF-8)`,
+    })
+    .refine(isPgText, PG_TEXT_MESSAGE);
 }
 
 /** Submitted source code: 1 character up to 64 KB of UTF-8. */
@@ -119,7 +128,10 @@ const emptyToUndefined = (value: unknown) =>
 
 /** Optional trimmed string; "" and whitespace become undefined. */
 export const optionalQueryString = (max: number) =>
-  z.preprocess(emptyToUndefined, z.string().trim().max(max).optional());
+  z.preprocess(
+    emptyToUndefined,
+    z.string().trim().max(max).refine(isPgText, PG_TEXT_MESSAGE).optional(),
+  );
 
 /** Optional enum that also accepts lower-case input ("easy" -> "EASY"); "" becomes undefined. */
 export const optionalUpperEnum = <T extends [string, ...string[]]>(schema: z.ZodEnum<T>) =>
@@ -161,17 +173,23 @@ export interface Page<T> {
 export const IdParams = z.object({ id: Id });
 export type IdParams = z.infer<typeof IdParams>;
 
-export const SlugParams = z.object({ slug: z.string().min(1).max(100) });
+export const SlugParams = z.object({
+  slug: z.string().min(1).max(100).refine(isPgText, PG_TEXT_MESSAGE),
+});
 export type SlugParams = z.infer<typeof SlugParams>;
 
-export const UsernameParams = z.object({ username: z.string().min(1).max(40) });
+export const UsernameParams = z.object({
+  username: z.string().min(1).max(40).refine(isPgText, PG_TEXT_MESSAGE),
+});
 export type UsernameParams = z.infer<typeof UsernameParams>;
 
-export const RunIdParams = z.object({ runId: z.string().min(1).max(64) });
+export const RunIdParams = z.object({
+  runId: z.string().min(1).max(64).refine(isPgText, PG_TEXT_MESSAGE),
+});
 export type RunIdParams = z.infer<typeof RunIdParams>;
 
 export const ContestProblemParams = z.object({
-  slug: z.string().min(1).max(100),
+  slug: z.string().min(1).max(100).refine(isPgText, PG_TEXT_MESSAGE),
   label: z.string().regex(/^[A-Za-z]{1,2}$/, 'Expected a problem label such as A'),
 });
 export type ContestProblemParams = z.infer<typeof ContestProblemParams>;

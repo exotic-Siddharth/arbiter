@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import {
   Id,
+  isPgText,
   IsoDateTime,
   LanguageSchema,
   NonNegativeInt,
   PageQuery,
+  PG_TEXT_MESSAGE,
   SourceCodeSchema,
   SubmissionStatusSchema,
   VerdictSchema,
@@ -67,10 +69,10 @@ export type SubmissionDetail = z.infer<typeof SubmissionDetailSchema>;
 
 /** POST /api/submissions (rate limit 6/min/user). */
 export const CreateSubmissionBody = z.object({
-  problemSlug: z.string().min(1).max(100),
+  problemSlug: z.string().min(1).max(100).refine(isPgText, PG_TEXT_MESSAGE),
   language: LanguageSchema,
   sourceCode: SourceCodeSchema,
-  contestSlug: z.string().min(1).max(100).optional(),
+  contestSlug: z.string().min(1).max(100).refine(isPgText, PG_TEXT_MESSAGE).optional(),
 });
 export type CreateSubmissionBody = z.infer<typeof CreateSubmissionBody>;
 

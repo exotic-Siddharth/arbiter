@@ -14,6 +14,7 @@ import type { Prisma, PrismaClient, Problem, TestCase } from '@prisma/client';
 import { conflict, notFound } from '../../lib/errors';
 import { paginate, toPage } from '../../lib/pagination';
 import { toIso } from '../../lib/time';
+import { lockContests, RATE_TRANSACTION_OPTIONS } from '../contests/admin';
 import { invalidateScoreboard } from '../contests/scoreboard';
 
 /** Admin problem and test-case content (/api/admin/problems). Owner: lane A3a. */
@@ -207,23 +208,34 @@ export async function updateAdminProblem(
  * DELETE: test cases, submissions and contest links cascade; the boards of those contests are
  * dropped. 409 when the problem is in a rated contest: the cascade would rewrite that contest's
  * problem list and standings while its RatingChange rows and user ratings keep the old ranks. The
- * condition is part of the DELETE, so a contest rated meanwhile cannot slip through.
+ * contest rows are locked first (lockContests), so a rating in flight finishes before the check
+ * and a rating that starts later sees the problem gone.
  */
 export async function deleteAdminProblem(prisma: PrismaClient, id: string): Promise<void> {
-  const links = await prisma.contestProblem.findMany({
-    where: { problemId: id },
-    select: { contestId: true },
-  });
-  const { count } = await prisma.problem.deleteMany({
-    where: { id, contestProblems: { none: { contest: { ratedAt: { not: null } } } } },
-  });
-  if (count === 0) {
-    if (await prisma.problem.findUnique({ where: { id }, select: { id: true } })) {
-      throw conflict('A problem of a rated contest cannot be deleted');
+  const contestIds = await prisma.$transaction(async (tx) => {
+    const links = await tx.contestProblem.findMany({
+      where: { problemId: id },
+      select: { contestId: true },
+    });
+    const locked = await lockContests(
+      tx,
+      links.map((link) => link.contestId),
+    );
+    const rated = locked.some((contest) => contest.ratedAt !== null);
+    const { count } = rated
+      ? { count: 0 }
+      : await tx.problem.deleteMany({
+          where: { id, contestProblems: { none: { contest: { ratedAt: { not: null } } } } },
+        });
+    if (count === 0) {
+      if (await tx.problem.findUnique({ where: { id }, select: { id: true } })) {
+        throw conflict('A problem of a rated contest cannot be deleted');
+      }
+      throw notFound('Problem not found');
     }
-    throw notFound('Problem not found');
-  }
-  await Promise.all(links.map((link) => invalidateScoreboard(link.contestId)));
+    return links.map((link) => link.contestId);
+  }, RATE_TRANSACTION_OPTIONS);
+  await Promise.all(contestIds.map(invalidateScoreboard));
 }
 
 interface TestSummaryRow {
