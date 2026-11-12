@@ -224,6 +224,16 @@ docs/                design, architecture, API, sandbox, deployment, benchmarks,
   account exists.
 - Known gaps: no end-to-end test of the admin contest flow (apply ratings, plagiarism run; A-70, covered
   by API and unit tests), and no per-IP cap on Socket.IO connections (part of A-11).
+- Dependency advisories (`npm audit --omit=dev`, 2026-11-12). None can be fixed without a major upgrade:
+  - **DOMPurify up to 3.4.16 (critical), bundled inside monaco-editor 0.57.0**, the latest stable release.
+    Monaco uses it to sanitise the Markdown in hover popups, which the TypeScript worker fills with JSDoc
+    from the code. Read-only editors, which show other people's code, have hovers turned off, and the CSP
+    blocks injected scripts. Upgrade Monaco once a release bundles DOMPurify 3.4.17 or later.
+  - **zod below 4.6.6 (high): memory exhaustion on oversized collections.** JSON bodies are capped at 1 MB
+    (20 MB for admin test uploads) and Socket.IO messages at its 1 MB default. The fix is the zod 4
+    migration, together with zod-to-openapi 8 or later.
+  - **Prisma 6 through `@prisma/config` and `deepmerge-ts` (high).** That code runs when Prisma loads its
+    configuration, not on request data. The fix is the Prisma 7 migration.
 
 ## Deployment
 

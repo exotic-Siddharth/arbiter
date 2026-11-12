@@ -11,13 +11,14 @@ vi.mock('@/lib/monaco', () => ({
     value?: string;
     language?: string;
     theme?: string;
-    options?: { readOnly?: boolean; ariaLabel?: string };
+    options?: { readOnly?: boolean; ariaLabel?: string; hover?: { enabled?: string } };
     onChange?: (value: string | undefined) => void;
   }) => (
     <textarea
       data-testid="monaco"
       data-language={props.language}
       data-theme={props.theme}
+      data-hover={props.options?.hover?.enabled ?? 'on'}
       aria-label={props.options?.ariaLabel}
       readOnly={props.options?.readOnly}
       value={props.value}
@@ -42,6 +43,16 @@ describe('CodeEditor', () => {
     rerender(<CodeEditor language="PYTHON" value="" theme="dark" />);
     expect(screen.getByTestId('monaco')).toHaveAttribute('data-theme', 'arbiter-dark');
     useTheme.setState({ theme: 'dark' });
+  });
+
+  // Hovers render Markdown (JSDoc from the TypeScript worker) through the DOMPurify copy bundled in
+  // monaco-editor, which npm audit flags (<= 3.4.16; no Monaco release ships a fix yet). A read-only
+  // editor shows someone else's code (submission pages, admin views), so it renders no hovers.
+  it("renders no hover popups when read-only, and keeps them for the user's own code", async () => {
+    const { rerender } = render(<CodeEditor language="JAVASCRIPT" value="" readOnly />);
+    expect(await screen.findByTestId('monaco')).toHaveAttribute('data-hover', 'off');
+    rerender(<CodeEditor language="JAVASCRIPT" value="" />);
+    expect(screen.getByTestId('monaco')).toHaveAttribute('data-hover', 'on');
   });
 
   it('reports edits through onChange', async () => {

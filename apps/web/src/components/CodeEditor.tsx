@@ -225,6 +225,9 @@ export function CodeEditor({
               readOnly,
               domReadOnly: readOnly,
               renderLineHighlight: readOnly ? 'none' : 'line',
+              // Read-only editors show other people's code. Hovers render its JSDoc as Markdown through
+              // the DOMPurify copy bundled in monaco-editor (npm audit: <= 3.4.16), so they are off here.
+              hover: { enabled: readOnly ? 'off' : 'on' },
               ariaLabel,
               ...options,
             }}
