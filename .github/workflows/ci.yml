@@ -160,6 +160,12 @@ jobs:
         run: docker build -t arbiter-sandbox:latest sandbox
       - name: Install chromium
         run: npx playwright install --with-deps chromium
+      # The e2e API and worker are real processes: they read apps/api/.env like a fresh clone does
+      # (the example holds dev-only values; the unit and integration jobs use their test defaults).
+      - name: Use the example environment
+        run: |
+          cp apps/api/.env.example apps/api/.env
+          cp apps/web/.env.example apps/web/.env
       - name: Run the e2e suite
         run: npm run e2e
       - name: Upload the Playwright report
