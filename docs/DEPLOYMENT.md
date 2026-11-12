@@ -22,7 +22,7 @@ run on a cloud VM by the author.
           postgres  redis        worker (same image as api)
                                    |  /var/run/docker.sock (host)
                                    v
-                             sandbox containers, one per judged test run
+                             sandbox containers, one per judge job
                              (image arbiter-sandbox:latest, built on the host, --network none)
 ```
 
