@@ -69,6 +69,13 @@ export function ProblemReferenceTab({
   const outputs = tests.data?.map((test) => [test.expectedOutputBytes, test.expectedOutputPreview]);
   // Generating outputs rewrites the expected outputs, so only validation depends on them.
   const generateKey = JSON.stringify([...judged, inputs]);
+  // Until the list is loaded the keys above are incomplete: a run started now would be tagged with
+  // a key that changes when the list arrives, and its result would be hidden.
+  const testsBlocked = tests.data
+    ? null
+    : tests.isError
+      ? 'Could not load the test list. Reload the page to try again.'
+      : 'Waiting for the test list to load.';
   const validateKey = JSON.stringify([
     ...judged,
     problem.checker,
@@ -171,6 +178,7 @@ export function ProblemReferenceTab({
           dirty={dirty || unsavedTemplate}
           hasReference={hasReference}
           testCount={problem.testCount}
+          testsBlocked={testsBlocked}
         />
         <GeneratePanel
           problemId={problem.id}
@@ -178,6 +186,7 @@ export function ProblemReferenceTab({
           dirty={dirty || unsavedTemplate}
           hasReference={hasReference}
           testCount={problem.testCount}
+          testsBlocked={testsBlocked}
         />
       </div>
     </div>
