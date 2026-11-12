@@ -11,9 +11,10 @@ More screens (light and dark themes, admin pages, plagiarism view, mobile) are i
 
 ## What it does
 
-- **Practice**: 15 original problems with statements in Markdown and KaTeX, an in-browser Monaco
-  editor with per-language templates and saved drafts, runs on custom input, and submissions judged
-  against hidden tests.
+- **Practice**: 15 original problems (8 in the public problem set, 7 held back for the running and
+  upcoming seeded contests) with statements in Markdown and KaTeX, an in-browser Monaco editor with
+  per-language templates and saved drafts, runs on custom input, and submissions judged against hidden
+  tests.
 - **Live judging**: Queued, Compiling, then one chip per test as each result arrives, then the verdict
   (AC, WA, TLE, MLE, RE, CE, OLE or IE) with time and memory. A failed sample shows input, expected and
   actual output.
@@ -73,8 +74,9 @@ request, so a demotion applies at once.
 
 **Plagiarism detection.** Winnowing as in MOSS: tokens are normalised (identifiers, numbers and strings
 become placeholders), 8-token k-grams are hashed with 64-bit FNV-1a and a window of 4 selects the
-fingerprints. The seed plants two copied pairs with renamed identifiers and the check finds both; the
-seed's independent solutions score at most 0.53 against the 0.6 threshold.
+fingerprints. The seed plants two copied pairs with renamed identifiers and the check finds both
+(scores 0.997 and 0.922); of the other 1,006 candidate pairs in the seeded contests, the highest scores
+0.563, below the 0.6 threshold.
 
 ## Architecture
 
@@ -117,8 +119,10 @@ realtime fan-out, the scoreboard and rating flow, and the design decisions with 
 
 ## Quick start
 
-Prerequisites: Node 22.12 or newer (with npm 10), Docker with Compose v2 (developed on Docker Desktop
-for Windows), and Python 3.9 or newer for the test generator.
+Prerequisites: Node 22.12 or newer (with npm 10), Docker with Compose v2 running (developed on Docker
+Desktop for Windows), and Python 3.9 or newer for the test generator. Run the commands from the
+repository root in a POSIX shell (Git Bash on Windows). The stack uses local ports 4000 (API), 5173
+(web), 9464 (worker metrics), 55432 (Postgres) and 56379 (Redis).
 
 ```sh
 npm install
@@ -133,6 +137,13 @@ npm run dev             # API on 4000, worker, web on 5173
 ```
 
 Open `http://localhost:5173`. Swagger UI for the API is at `http://localhost:4000/api/docs`.
+
+Notes from a run of these steps on a fresh clone (2026-11-12, Windows 11, Node 22.12): `npm install`
+took about 1.5 minutes, `problems:gen` 45 s and `db:seed` 16 s. On Node 22.12, `npm install` prints an
+`EBADENGINE` warning for `eslint-visitor-keys` (it asks for 22.13); it is harmless. `problems:gen` calls
+`python`; where only `python3` exists, run `python3 scripts/gen-tests.py --all` instead. The worker
+starts sandbox containers through the `docker` CLI; if that is not on `PATH`, set `DOCKER_BIN` in
+`apps/api/.env` to its absolute path.
 
 `npm run db:seed` stops with a message if the hidden tests are missing; run `npm run problems:gen`
 first. Rerunning the seed gives the same data, with times relative to now. It contains 15 problems
@@ -167,9 +178,12 @@ npm run e2e             # Playwright; starts its own API, worker and web (databa
 | Sandbox, real Docker (`npm run test:sandbox`) | 54 | 3 |
 | End to end, Playwright (`npm run e2e`) | 15 | 4 |
 
-Counted on 2026-11-12: the `npm test` and sandbox suites by running them (all passed), the e2e suite
-with `playwright test --list` (its last full runs passed 15 of 15 in the review gate). The integration
-tests use their own database (`arbiter_test`) and refuse to run against the development database.
+Counted on 2026-11-12 by running every suite on the development laptop; all passed. The e2e suite
+passed 15 of 15 on two consecutive runs (about 4 minutes each). One earlier run failed a single test
+while another session held the host CPU at 100%: a C++ compile hit the sandbox's 15 s compile limit and
+the submission ended as a compilation error. The e2e suite therefore needs a machine that is not fully
+loaded. The integration tests use their own database (`arbiter_test`) and refuse to run against the
+development database.
 
 ## Project layout
 
