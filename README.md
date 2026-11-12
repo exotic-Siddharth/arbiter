@@ -3,6 +3,10 @@
 Online judge and live programming-contest platform with Docker-sandboxed code execution.
 The design lives in [docs/DESIGN.md](docs/DESIGN.md) (its Decisions log records every deviation).
 
+![The problem workspace after an Accepted submission: statement, Monaco editor and the live verdict](docs/screenshots/hero.png)
+
+More screens (light and dark, admin, plagiarism, mobile) are in [docs/screenshots](docs/screenshots).
+
 ## Quick start (development)
 
 Needs Node 22.12+, Docker, and Python 3.9+ (for the problem-set scripts).
@@ -32,6 +36,13 @@ npm run typecheck && npm run lint && npm run format:check
 npm test                    # unit + integration (needs Postgres and Redis)
 npm run test:sandbox        # real-Docker judge tests (needs the sandbox image)
 ```
+
+## Benchmarks
+
+`npm run loadtest` and `npm run judge:refs` measure judging throughput and read latency;
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md) has the method, the numbers from one shared laptop (about 43
+submissions judged per minute with two judge slots, 2.7 s median queue-to-verdict for a C++/Python
+submission that does not wait) and the caveats.
 
 ## Deployment and CI
 
