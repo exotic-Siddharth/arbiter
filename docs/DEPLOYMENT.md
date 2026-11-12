@@ -217,8 +217,8 @@ SIGTERM. `docker compose ... down` keeps the volumes; add `-v` only when you mea
 Vercel, Netlify, Cloudflare Workers, AWS Lambda and Render-style web services run your code as a short-lived
 function or in a container with no access to a Docker daemon. The judge needs three things they do not give:
 
-1. **A Docker daemon it controls.** Every judged run is a fresh container started with the Docker CLI
-   (`--network none`, read-only root, memory, CPU and PID limits). Platform containers do not expose
+1. **A Docker daemon it controls.** Every judge job (a submission or a custom run) gets a fresh
+   container started with the Docker CLI (`--network none`, read-only root, memory, CPU and PID limits). Platform containers do not expose
    `/var/run/docker.sock`, and running Docker inside them needs privileged mode, which these platforms
    refuse.
 2. **A long-lived process.** The worker holds a BullMQ connection to Redis, a heartbeat and in-flight jobs

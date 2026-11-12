@@ -78,5 +78,5 @@ the harness writes fd 1.
 | `runTest` round trip, C++ echo program | 21 ms (the program's own wall time is 5 ms, so about 16 ms of overhead) |
 | `runTest` round trip, Python echo program | 88 ms (the program's own wall time is 43 ms, interpreter start included, so about 45 ms of overhead) |
 
-The start time is dominated by Docker Desktop's container creation. On a native Linux Docker host,
-expect well under 1 s.
+The start time was measured on Docker Desktop only, where containers run in a Linux VM. A native
+Linux Docker host is likely faster, but that was not measured here.

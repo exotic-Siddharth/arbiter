@@ -46,10 +46,10 @@ flowchart LR
   S --> E["error handler: { error: { code, message, details } }"]
 ```
 
-- Every route is declared through one helper (`lib/router.ts`) that applies auth, validation and
-  OpenAPI registration in a single declaration. A test checks that every `/api` route is in the
-  OpenAPI document and that the registered routes equal the specification's list plus two documented
-  extras.
+- Every route except the OpenAPI document and Swagger UI is declared through one helper
+  (`lib/router.ts`) that applies auth, validation and OpenAPI registration in a single declaration. A
+  test checks that every `/api` route is in the OpenAPI document and that the registered routes equal
+  the specification's list plus two documented extras.
 - Authorization lives in the services (owner-or-admin for source code, contest visibility rules), not
   only in middleware.
 - An access token that claims ADMIN is re-checked against the database on every request, so a
@@ -146,8 +146,9 @@ flowchart TB
   RT --> INV[drop cached boards]
 ```
 
-- **ICPC rules**: rank by problems solved, then by penalty (minutes to each first AC plus 20 minutes per
-  earlier wrong attempt; CE and IE do not count). Ties share a rank.
+- **ICPC rules**: rank by problems solved, then by penalty (minutes to each first AC plus the contest's
+  penalty, 20 minutes by default, per earlier wrong attempt; CE and IE do not count). Ties share a
+  rank.
 - **Cache**: one ZSET for the order and one HASH for the rows per contest. A judged submission
   recomputes only that user's row from Postgres; a read of a missing cache rebuilds the whole board
   under a lock. Row writes are conditional on the cache existing (a Lua script), so a write can never

@@ -128,7 +128,8 @@ authoritative; a mismatch is logged.
 ## Worker-side safety
 
 - **Overall deadline**: 60 s to reach `ready`, then compile 20 s + the sum over tests of (wall limit +
-  1 s) + 10 s. Past it the worker runs `docker kill`.
+  1 s) + 10 s, capped at 15 minutes (`containerDeadlineMs` in `judge/languages.ts`). Past it the
+  worker runs `docker kill`.
 - **Malformed harness output**, a missing Docker CLI or a missing image end the submission as
   FAILED with verdict IE and a clear `errorMessage` (admin-only), never an endless spinner.
 - **Retries**: BullMQ gives a crashed job 3 attempts with exponential backoff; only the final attempt

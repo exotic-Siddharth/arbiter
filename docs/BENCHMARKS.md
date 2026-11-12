@@ -184,7 +184,7 @@ the per-run CPU % columns above:
 - One shared Windows laptop, not a server. Another user session shares it and may start ML jobs at any
   time; the start and end loads above are a sample of two instants, not a record of the whole run.
 - Docker Desktop runs the sandbox containers in a WSL2 VM, so each `docker run` pays a Windows to VM hop
-  and the sandbox CPU limit competes with the host's own processes. A native Linux host would be faster
+  and the sandbox CPU limit competes with the host's own processes. A native Linux host is likely faster
   per container; I did not measure one.
 - The load generator, API, worker, Postgres, Redis and the sandboxes all run on the same 4 cores, so every
   number includes the generator's own CPU use, and the 8-client read figures in particular are partly a
