@@ -62,14 +62,30 @@ function testSummary(ordinal: number): AdminTestCaseSummary {
 }
 
 /** A server holding problems by id; every PUT stores the body and bumps updatedAt. */
-function setup(problems: AdminProblem[], route: string) {
+function setup(problems: AdminProblem[], route: string, options: { testsDelayMs?: number } = {}) {
   const stored = new Map(problems.map((problem) => [problem.id, problem]));
   const tests = new Map(problems.map((problem) => [problem.id, [testSummary(1), testSummary(2)]]));
   let version = 0;
   const routes: Parameters<typeof mockFetch>[0] = {};
   for (const id of stored.keys()) {
     routes[`GET /api/admin/problems/${id}`] = () => jsonResponse(200, stored.get(id));
-    routes[`GET /api/admin/problems/${id}/tests`] = () => jsonResponse(200, tests.get(id));
+    routes[`GET /api/admin/problems/${id}/tests`] = async () => {
+      if (options.testsDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.testsDelayMs));
+      }
+      return jsonResponse(200, tests.get(id));
+    };
+    routes[`POST /api/admin/problems/${id}/generate-outputs`] = () =>
+      jsonResponse(202, { jobId: `j_${id}` });
+    routes[`GET /api/admin/jobs/j_${id}`] = () =>
+      jsonResponse(200, {
+        id: `j_${id}`,
+        type: 'GENERATE_OUTPUTS',
+        status: 'DONE',
+        progress: 2,
+        total: 2,
+        error: null,
+      });
     routes[`PUT /api/admin/problems/${id}`] = ({ body }) => {
       version += 1;
       const next = {
@@ -154,6 +170,37 @@ describe('Reference verdict is tied to what it judged (A-R3-03)', () => {
     await waitFor(() => expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument());
     await user.click(screen.getByRole('tab', { name: 'Reference' }));
     expect(screen.getByText(ACCEPTED)).toBeInTheDocument();
+  });
+});
+
+// The verdict keys include the test list, so a run started before it loads would be tagged with a
+// key that changes as soon as the list arrives, and its result would be hidden (the admin e2e
+// "Generate outputs ... Done" test failed this way).
+describe('Validate and Generate wait for the test list their verdict key needs', () => {
+  it('both buttons stay disabled until the tests have loaded', async () => {
+    setup([adminProblem()], '/admin/problems/p_1?tab=reference', { testsDelayMs: 300 });
+    const validateButton = await screen.findByRole('button', { name: 'Validate' });
+    const generateButton = screen.getByRole('button', { name: 'Generate outputs' });
+    expect(validateButton).toBeDisabled();
+    expect(generateButton).toBeDisabled();
+    expect(screen.getAllByText('Waiting for the test list to load.')).toHaveLength(2);
+    await waitFor(() => expect(generateButton).toBeEnabled());
+    expect(validateButton).toBeEnabled();
+  });
+
+  it('Generate outputs started as soon as it can be still shows Done once the tests have loaded', async () => {
+    const user = userEvent.setup();
+    const { queryClient } = setup([adminProblem()], '/admin/problems/p_1?tab=reference', {
+      testsDelayMs: 300,
+    });
+    const button = await screen.findByRole('button', { name: 'Generate outputs' });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+    expect(await screen.findByText('Done', {}, { timeout: 5000 })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(queryClient.getQueryState(qk.admin.problems.tests('p_1'))?.status).toBe('success'),
+    );
+    expect(screen.getByText('Done')).toBeInTheDocument();
   });
 });
 

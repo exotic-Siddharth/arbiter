@@ -112,6 +112,11 @@ export interface ValidatePanelProps {
   dirty: boolean;
   hasReference: boolean;
   testCount: number;
+  /**
+   * Why a run cannot start yet because the test list (part of inputsKey) is not loaded; null once
+   * it is. A run started earlier would carry a key that changes when the list arrives.
+   */
+  testsBlocked?: string | null;
 }
 
 /** Validate: enqueue a REFERENCE submission and watch it like any submission. */
@@ -121,6 +126,7 @@ export function ValidatePanel({
   dirty,
   hasReference,
   testCount,
+  testsBlocked = null,
 }: ValidatePanelProps) {
   const [started, setStarted] = useState<{ submissionId: string; inputsKey: string } | null>(null);
   // A verdict on other code, limits or tests than the current ones is not shown.
@@ -141,7 +147,7 @@ export function ValidatePanel({
       ? 'Save a reference solution first.'
       : testCount === 0
         ? 'Add tests first.'
-        : null;
+        : testsBlocked;
 
   return (
     <Card>
@@ -186,6 +192,8 @@ export interface GeneratePanelProps {
   dirty: boolean;
   hasReference: boolean;
   testCount: number;
+  /** As in ValidatePanel. */
+  testsBlocked?: string | null;
 }
 
 /** Generate outputs: run the reference on every input and overwrite expectedOutput. */
@@ -195,6 +203,7 @@ export function GeneratePanel({
   dirty,
   hasReference,
   testCount,
+  testsBlocked = null,
 }: GeneratePanelProps) {
   const queryClient = useQueryClient();
   const [started, setStarted] = useState<{ jobId: string; inputsKey: string } | null>(null);
@@ -230,7 +239,7 @@ export function GeneratePanel({
       ? 'Save a reference solution first.'
       : testCount === 0
         ? 'Add tests first.'
-        : null;
+        : testsBlocked;
 
   return (
     <Card>
