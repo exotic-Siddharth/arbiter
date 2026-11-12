@@ -32,6 +32,25 @@ describe('ContestForm for a rated contest (A-18)', () => {
     expect(screen.getByRole('button', { name: /Add problems/ })).toBeEnabled();
   });
 
+  it('maps the API slug conflict (generic message, details.target) to the slug field', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockRejectedValue(
+      new ApiError({
+        status: 409,
+        code: 'CONFLICT',
+        message: 'A record with this value already exists',
+        details: { target: ['slug'] },
+      }),
+    );
+    renderWithProviders(
+      <ContestForm initial={contestToForm(adminContest())} isNew={false} onSave={onSave} />,
+      { user: adminUser },
+    );
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText(/already used by another contest/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Slug/)).toHaveAttribute('aria-invalid', 'true');
+  });
+
   it('shows the server message of a 409 that is not about the slug', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockRejectedValue(

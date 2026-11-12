@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { setupTestDatabase } from '../../test/db';
+import { createProblem, createUser } from '../../test/factories';
 
 let prisma: PrismaClient;
 beforeAll(async () => {
@@ -37,5 +38,40 @@ describe('indexes added by the review (A-26, A-51)', () => {
       );
       expect(found, `${table}(${columns.join(', ')})`).toBe(true);
     }
+  });
+
+  it('the stuck-row reconciler range-scans Submission(status, createdAt), not the whole table', async () => {
+    // Steady state: a long history of DONE rows and nothing stuck. The rows and the statistics of
+    // ANALYZE live only inside this transaction, which is rolled back.
+    const user = await createUser(prisma);
+    const problem = await createProblem(prisma);
+    let plan = '';
+    const rollback = new Error('rollback');
+    await prisma
+      .$transaction(
+        async (tx) => {
+          await tx.$executeRaw`
+            INSERT INTO "Submission" (id, "userId", "problemId", language, "sourceCode", status, "createdAt")
+            SELECT 'idx-' || g, ${user.id}, ${problem.id}, 'PYTHON', 'print(1)', 'DONE',
+                   now() - g * interval '1 second'
+            FROM generate_series(1, 20000) AS g`;
+          await tx.$executeRawUnsafe('ANALYZE "Submission"');
+          const rows = await tx.$queryRawUnsafe<{ 'QUERY PLAN': string }[]>(
+            `EXPLAIN SELECT id FROM "Submission"
+             WHERE status IN ('QUEUED', 'COMPILING', 'RUNNING')
+               AND "createdAt" < now() - interval '5 minutes'
+             ORDER BY "createdAt" LIMIT 200`,
+          );
+          plan = rows.map((row) => row['QUERY PLAN']).join(' ');
+          throw rollback;
+        },
+        { timeout: 60_000 },
+      )
+      .catch((error: unknown) => {
+        if (error !== rollback) throw error;
+      });
+    expect(plan).toContain('Submission_status_createdAt_idx');
+    expect(plan).toMatch(/Index Cond: \(\(?status = ANY/);
+    expect(plan).not.toContain('Seq Scan');
   });
 });

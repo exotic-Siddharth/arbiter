@@ -1,5 +1,5 @@
 import { DIFFICULTIES, DIFFICULTY_IDS, type AdminProblemBody } from '@arbiter/shared';
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   Alert,
   Button,
@@ -10,7 +10,7 @@ import {
   Select,
   Switch,
 } from '@/components/ui';
-import { fieldErrors, getErrorMessage, isApiError } from '@/lib/api';
+import { fieldErrors, getErrorMessage } from '@/lib/api';
 import {
   EMPTY_PROBLEM_FORM,
   parseTags,
@@ -18,6 +18,7 @@ import {
   type ProblemFormState,
   type ProblemReference,
 } from '../lib/problemForm';
+import { isSlugConflict } from '../lib/slugConflict';
 import { MarkdownEditor } from './MarkdownEditor';
 import { UnsavedChangesGuard } from './UnsavedChangesGuard';
 
@@ -39,6 +40,18 @@ export interface ProblemDetailsFormProps {
   onSave: (body: AdminProblemBody) => Promise<void>;
   /** Text of the submit button when it differs from the default. */
   saveLabel?: string;
+  /** Saved test cases; publishing needs at least one (a new problem has none). */
+  testCount?: number;
+  /**
+   * The server's version of `initial` (updatedAt). When it changes, the form re-reads `initial`,
+   * but only while it has no unsaved edits: a save on another editor tab must not drop them.
+   */
+  version?: string;
+  /**
+   * Reports the unsaved-edits flag. When given, the page renders the one unsaved-changes guard
+   * (React Router supports a single active blocker), so the form renders none itself.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /** Details tab: meta fields, markdown statement with live preview, publish toggle. */
@@ -48,6 +61,9 @@ export function ProblemDetailsForm({
   isNew,
   onSave,
   saveLabel,
+  testCount = 0,
+  version,
+  onDirtyChange,
 }: ProblemDetailsFormProps) {
   const [form, setForm] = useState<ProblemFormState>(initial ?? EMPTY_PROBLEM_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -55,6 +71,18 @@ export function ProblemDetailsForm({
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const savingRef = useRef(false);
+
+  // Re-read the server's (normalised) values once the form is clean: right after its own save,
+  // or on a refetch while untouched. A dirty form keeps its edits and catches up after saving.
+  const [syncedVersion, setSyncedVersion] = useState(version);
+  if (version !== syncedVersion && !dirty) {
+    setSyncedVersion(version);
+    setForm(initial ?? EMPTY_PROBLEM_FORM);
+  }
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const update = <K extends keyof ProblemFormState>(key: K, value: ProblemFormState[K]) => {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -86,7 +114,7 @@ export function ProblemDetailsForm({
       if (Object.keys(fields).length > 0) {
         setErrors(fields);
         setFormError('The server rejected some fields.');
-      } else if (isApiError(error) && error.status === 409) {
+      } else if (isSlugConflict(error)) {
         setErrors({ slug: getErrorMessage(error) });
         setFormError('That slug is already used by another problem.');
       } else {
@@ -99,10 +127,12 @@ export function ProblemDetailsForm({
   };
 
   const tags = parseTags(form.tags);
+  // The API refuses to publish a problem without tests (409); unpublishing stays possible.
+  const cannotPublish = testCount === 0 && !form.isPublished;
 
   return (
     <form onSubmit={(event) => void submit(event)} noValidate className="space-y-5">
-      <UnsavedChangesGuard dirty={dirty} savingRef={savingRef} />
+      {onDirtyChange ? null : <UnsavedChangesGuard dirty={dirty} savingRef={savingRef} />}
       {formError ? (
         <Alert tone="danger" title="Could not save the problem">
           {formError}
@@ -227,10 +257,13 @@ export function ProblemDetailsForm({
             checked={form.isPublished}
             onCheckedChange={(checked) => update('isPublished', checked)}
             label="Published"
+            disabled={cannotPublish}
             description={
               form.isPublished
                 ? 'Visible on /problems and open for submissions.'
-                : 'Draft: only admins can see it. Publish after the reference passes.'
+                : cannotPublish
+                  ? 'Draft: add at least one test case before publishing.'
+                  : 'Draft: only admins can see it. Publish after the reference passes.'
             }
           />
           <div className="flex items-center gap-3">

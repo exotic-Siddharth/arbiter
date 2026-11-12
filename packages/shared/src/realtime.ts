@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   Id,
+  hasNul,
   IsoDateTime,
   LanguageSchema,
   NonNegativeInt,
@@ -98,7 +99,13 @@ export const SubmissionRoomPayload = z.object({ id: Id });
 export type SubmissionRoomPayload = z.infer<typeof SubmissionRoomPayload>;
 
 /** contest:subscribe / contest:unsubscribe (joins contest:<contestId>). */
-export const ContestRoomPayload = z.object({ slug: z.string().min(1).max(100) });
+export const ContestRoomPayload = z.object({
+  slug: z
+    .string()
+    .min(1)
+    .max(100)
+    .refine((value) => !hasNul(value), 'Must not contain NUL characters'),
+});
 export type ContestRoomPayload = z.infer<typeof ContestRoomPayload>;
 
 /** {ok:true} or {ok:false, error} where error is an ErrorCode such as NOT_FOUND or FORBIDDEN. */

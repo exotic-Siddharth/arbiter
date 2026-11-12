@@ -1,5 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { LIMITS } from '@arbiter/shared';
 import { describe, expect, it } from 'vitest';
 import { apiError, jsonResponse, mockFetch } from '@/test/fetchMock';
 import { renderWithProviders } from '@/test/render';
@@ -71,5 +72,26 @@ describe('LeaderboardPage', () => {
     expect(new URLSearchParams(router.state.location.search).get('page')).toBe('2');
     expect(api.requests.at(-1)?.query.get('page')).toBe('2');
     expect(screen.queryByText(/no ranked players/i)).not.toBeInTheDocument();
+  });
+
+  it('clamps ?page above the API maximum and then moves to the last page (A-R2-17)', async () => {
+    const api = mockFetch({
+      'GET /api/leaderboard': ({ query }) => {
+        const requested = Number(query.get('page') ?? 1);
+        if (requested > LIMITS.pageMax) return apiError(400, 'VALIDATION', 'page too large');
+        return jsonResponse(200, {
+          items: requested > 2 ? [] : entries,
+          total: 40,
+          page: requested,
+          pageSize: 25,
+        });
+      },
+    });
+    const { router } = renderWithProviders(<LeaderboardPage />, {
+      route: '/leaderboard?page=2000000',
+    });
+    await screen.findByText('grace');
+    expect(api.requests[0]?.query.get('page')).toBe(String(LIMITS.pageMax));
+    expect(new URLSearchParams(router.state.location.search).get('page')).toBe('2');
   });
 });

@@ -11,6 +11,8 @@ import { PlagiarismRunCard, RatingsCard } from './ContestActions';
 import { ContestForm } from './ContestForm';
 import { contestToForm } from '../lib/contestForm';
 
+const PENDING_POLL_MS = 5_000;
+
 const BACK = (
   <Link to="/admin/contests" className="inline-flex items-center gap-1.5 hover:text-foreground">
     <ArrowLeft aria-hidden="true" className="size-3.5" />
@@ -34,6 +36,8 @@ export function ExistingContest({ id }: { id: string }) {
     queryKey: qk.admin.contests.detail(id),
     queryFn: ({ signal }) =>
       api.get(`/admin/contests/${id}`, { schema: AdminContestSchema, signal }),
+    // Re-read while counted submissions are judged, so Apply ratings enables itself afterwards.
+    refetchInterval: (q) => (q.state.data?.pendingSubmissions ? PENDING_POLL_MS : false),
   });
 
   const save = async (body: AdminContestBody) => {

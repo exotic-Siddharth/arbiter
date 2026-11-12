@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
+import { parsePageParam } from '@/lib/page';
 
 const SEARCH_DELAY_MS = 300;
 
@@ -9,8 +10,7 @@ const SEARCH_DELAY_MS = 300;
  */
 export function useListParams() {
   const [params, setParams] = useSearchParams();
-  const rawPage = Number.parseInt(params.get('page') ?? '1', 10);
-  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+  const page = parsePageParam(params.get('page'));
   const search = params.get('q') ?? '';
   const [text, setText] = useState(search);
   const lastPushed = useRef(search);

@@ -117,6 +117,33 @@ describe('scoreboardReducer', () => {
     expect(alone.stale).toBe(false);
   });
 
+  it('marks the page stale when a mid-page row worsens into the last slot (A-R2-12)', () => {
+    const state = load(
+      board([row('p1', 1, 10, 1), row('p2', 1, 30, 2), row('p3', 1, 40, 3)], {
+        total: 4,
+        pageSize: 3,
+      }),
+    );
+    // p2 (1, 50) now sorts last and may rank behind p4 (1, 45) on page 2.
+    const worse = scoreboardReducer(state, {
+      type: 'row',
+      contestSlug: 'weekly',
+      row: row('p2', 1, 50, 2),
+      at: 2000,
+    });
+    expect(worse.rows.map((r) => r.username)).toEqual(['p1', 'p3', 'p2']);
+    expect(worse.stale).toBe(true);
+    // Worsening but staying above the last row keeps the page exact.
+    const mild = scoreboardReducer(state, {
+      type: 'row',
+      contestSlug: 'weekly',
+      row: row('p1', 1, 35, 1),
+      at: 2000,
+    });
+    expect(mild.rows.map((r) => r.username)).toEqual(['p2', 'p1', 'p3']);
+    expect(mild.stale).toBe(false);
+  });
+
   it('gives equal (solved, penalty) the same rank and skips the next ones', () => {
     const state = load(
       board([row('alice', 2, 100, 1), row('bob', 1, 30, 2), row('carol', 1, 50, 3)]),

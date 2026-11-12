@@ -1,6 +1,7 @@
 import { AdminProblemSchema, type AdminProblem, type AdminProblemBody } from '@arbiter/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Page } from '@/components/layout/Page';
 import {
@@ -21,6 +22,7 @@ import { toast } from '@/lib/toast';
 import { ProblemDetailsForm } from './ProblemDetailsForm';
 import { ProblemReferenceTab } from './ProblemReferenceTab';
 import { ProblemTestsTab } from './ProblemTestsTab';
+import { UnsavedChangesGuard } from './UnsavedChangesGuard';
 import { problemReference, problemToForm } from '../lib/problemForm';
 
 type Tab = 'details' | 'tests' | 'reference';
@@ -51,6 +53,13 @@ export function ExistingProblem({ id }: { id: string }) {
   const [params, setParams] = useSearchParams();
   const requested = params.get('tab');
   const tab: Tab = isTab(requested) ? requested : 'details';
+  // One unsaved-changes guard for the page (a single active blocker), fed by both editors.
+  const [detailsDirty, setDetailsDirty] = useState(false);
+  const [referenceDirty, setReferenceDirty] = useState(false);
+  // Monaco loads on the first visit to Reference; from then on the panel stays mounted so a
+  // tab switch keeps unsaved code.
+  const [referenceVisited, setReferenceVisited] = useState(tab === 'reference');
+  if (tab === 'reference' && !referenceVisited) setReferenceVisited(true);
 
   const problem = useQuery({
     queryKey: qk.admin.problems.detail(id),
@@ -91,6 +100,7 @@ export function ExistingProblem({ id }: { id: string }) {
         ) : null
       }
     >
+      <UnsavedChangesGuard dirty={detailsDirty || referenceDirty} />
       <QueryState query={problem} loading={<EditorSkeleton />}>
         {(data: AdminProblem) => (
           <Tabs
@@ -123,20 +133,22 @@ export function ExistingProblem({ id }: { id: string }) {
                   submissions accepted.
                 </p>
               ) : null}
-              {/* Remount after a save so the form re-reads the server's normalised values. */}
+              {/* No remount on refetch: a Reference save must not drop unsaved Details edits. */}
               <ProblemDetailsForm
-                key={data.updatedAt}
+                version={data.updatedAt}
                 initial={problemToForm(data)}
                 reference={problemReference(data)}
                 isNew={false}
+                testCount={data.testCount}
                 onSave={save}
+                onDirtyChange={setDetailsDirty}
               />
             </TabsContent>
             <TabsContent value="tests" className="pt-5">
               <ProblemTestsTab problemId={data.id} />
             </TabsContent>
-            <TabsContent value="reference" className="pt-5">
-              <ProblemReferenceTab key={data.updatedAt} problem={data} />
+            <TabsContent value="reference" keepMounted={referenceVisited} className="pt-5">
+              <ProblemReferenceTab problem={data} onDirtyChange={setReferenceDirty} />
             </TabsContent>
           </Tabs>
         )}

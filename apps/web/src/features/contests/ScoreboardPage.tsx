@@ -5,7 +5,7 @@ import { Page } from '@/components/layout/Page';
 import { LiveScoreboard } from './components/LiveScoreboard';
 import { ContestStatusBadge } from './components/ContestStatusBadge';
 import { useContest } from './hooks/useContest';
-import { parsePageParam } from './lib/page';
+import { parsePageParam } from '@/lib/page';
 
 /** /contests/:slug/scoreboard: the full live ICPC table with pagination (spec 13.2). */
 export function Component() {

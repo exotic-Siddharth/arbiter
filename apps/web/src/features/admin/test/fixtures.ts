@@ -1,5 +1,6 @@
 import type {
   AdminContest,
+  AdminProblem,
   AdminUser,
   JudgeStatus,
   Me,
@@ -77,6 +78,31 @@ export function adminContest(overrides: Partial<AdminContest> = {}): AdminContes
       { problemId: 'p1', label: 'A', ordinal: 0, slug: 'lantern-rows', title: 'Lantern Rows' },
       { problemId: 'p2', label: 'B', ordinal: 1, slug: 'ferry-schedule', title: 'Ferry Schedule' },
     ],
+    createdAt: '2026-09-20T10:00:00.000Z',
+    updatedAt: '2026-09-25T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export function adminProblem(overrides: Partial<AdminProblem> = {}): AdminProblem {
+  return {
+    id: 'p_1',
+    slug: 'lantern-rows',
+    title: 'Lantern Rows',
+    statementMd: 'Count the lanterns.',
+    difficulty: 'EASY',
+    timeLimitMs: 1000,
+    memoryLimitMb: 256,
+    checker: 'TOKENS',
+    floatTolerance: null,
+    isPublished: false,
+    tags: ['math'],
+    referenceLanguage: 'PYTHON',
+    referenceSolution: 'print(1)\n',
+    testCount: 2,
+    sampleCount: 1,
+    submissionCount: 0,
+    acceptedCount: 0,
     createdAt: '2026-09-20T10:00:00.000Z',
     updatedAt: '2026-09-25T10:00:00.000Z',
     ...overrides,

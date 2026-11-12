@@ -1,9 +1,9 @@
 import type { ContestSummary } from '@arbiter/shared';
-import { ArrowRight, CalendarClock, Swords } from 'lucide-react';
+import { ArrowRight, CalendarClock, RotateCcw, Swords } from 'lucide-react';
 import { Link } from 'react-router';
 import { Countdown } from '@/components/Countdown';
 import { Badge } from '@/components/ui/Badge';
-import { ButtonLink } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { EmptyState, ErrorState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -100,6 +100,28 @@ export function FeaturedContest() {
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-9 w-full" />
         </div>
+      ) : featured.contest ? (
+        <>
+          {featured.isError && (
+            // A failed background refetch keeps the contest TanStack still holds (as QueryState).
+            <div
+              role="status"
+              className="mx-5 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-control border border-warning/30 bg-warning/10 px-3 py-2 text-[13px] text-foreground"
+            >
+              <span>Could not refresh this data. Showing what was loaded earlier.</span>
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<RotateCcw />}
+                loading={featured.isFetching}
+                onClick={() => void featured.refetch()}
+              >
+                Try again
+              </Button>
+            </div>
+          )}
+          <ContestBody contest={featured.contest} offsetMs={featured.offsetMs} />
+        </>
       ) : featured.isError ? (
         <ErrorState
           compact
@@ -108,8 +130,6 @@ export function FeaturedContest() {
           retrying={featured.isFetching}
           onRetry={() => void featured.refetch()}
         />
-      ) : featured.contest ? (
-        <ContestBody contest={featured.contest} offsetMs={featured.offsetMs} />
       ) : (
         <EmptyState
           compact

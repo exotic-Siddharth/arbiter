@@ -9,11 +9,12 @@ import {
 import type { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { io as connect, type Socket } from 'socket.io-client';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { resetTables, setupTestDatabase } from '../../test/db';
 import { createContest, createProblem, createSubmission, createUser } from '../../test/factories';
 import { env } from '../config/env';
 import { signAccessToken } from '../lib/jwt';
+import { logger } from '../lib/logger';
 import { emitter } from './emitter';
 import { initRealtime, type RealtimeServer } from './io';
 
@@ -335,6 +336,24 @@ describe('realtime', () => {
       Array.from({ length: 8 }, () => ackOf((ack) => socket.emit('feed:subscribe', ack))),
     );
     expect(acks).toEqual(Array.from({ length: 8 }, () => ({ ok: true })));
+  });
+
+  it('a NUL in a subscribe id or slug acks VALIDATION_ERROR and logs no error', async () => {
+    const user = await createUser(prisma);
+    const socket = open(signAccessToken(user));
+    await connected(socket);
+    const errorLog = vi.spyOn(logger, 'error');
+    try {
+      expect(
+        await ackOf((ack) => socket.emit('contest:subscribe', { slug: 'a\u0000b' }, ack)),
+      ).toEqual({ ok: false, error: 'VALIDATION_ERROR' });
+      expect(
+        await ackOf((ack) => socket.emit('submission:subscribe', { id: 'a\u0000b' }, ack)),
+      ).toEqual({ ok: false, error: 'VALIDATION_ERROR' });
+      expect(errorLog).not.toHaveBeenCalled();
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 
   it('the emitter rejects payloads that do not match the shared schema', () => {

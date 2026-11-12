@@ -2,11 +2,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { resetTables, setupTestDatabase } from '../../test/db';
+import { createContest } from '../../test/factories';
 import { getRedis } from '../lib/redis';
 import { fingerprints, similarity, tokenize } from '../modules/plagiarism/winnow';
 import { GEN_COMMAND, SeedDataError, assertHiddenTests, lf } from './problems';
 import { createRng } from './rng';
-import { clearScoreboardCaches } from './run';
+import { clearScoreboardCaches, runSeed } from './run';
 import { simulateContest, simulatePractice, type SimProblem } from './simulate';
 import {
   breakSource,
@@ -192,18 +194,40 @@ describe('hidden-test guard', () => {
 });
 
 describe('clearScoreboardCaches', () => {
-  it('deletes every contest scoreboard key (including the lock) and leaves other keys alone', async () => {
+  const keysOf = (id: string) =>
+    ['rank', 'rows', 'updatedAt', 'lock'].map((part) => `contest:${id}:${part}`);
+
+  it("deletes exactly the given contests' scoreboard keys (including the lock)", async () => {
     const redis = getRedis();
     const id = `seedtest${Date.now()}`;
-    const scoreboard = ['rank', 'rows', 'updatedAt', 'lock'].map((part) => `contest:${id}:${part}`);
-    const others = [`contest:${id}:other`, `bull:${id}:wait`, `sessions:${id}`];
+    const unrelated = `${id}other`;
+    const scoreboard = keysOf(id);
+    const others = [...keysOf(unrelated), `contest:${id}:other`, `bull:${id}:wait`];
     await Promise.all([...scoreboard, ...others].map((key) => redis.set(key, '1')));
     try {
-      await clearScoreboardCaches();
+      await clearScoreboardCaches([id]);
       expect(await redis.exists(...scoreboard)).toBe(0);
       expect(await redis.exists(...others)).toBe(others.length);
     } finally {
       await redis.del(...scoreboard, ...others);
     }
   });
+
+  it("a seed run drops the replaced contests' caches and leaves other contests' keys alone", async () => {
+    const prisma = await setupTestDatabase();
+    const replaced = await createContest(prisma);
+    const unrelated = `seedother${Date.now()}`;
+    const redis = getRedis();
+    const replacedKeys = keysOf(replaced.id);
+    const unrelatedKeys = keysOf(unrelated);
+    await Promise.all([...replacedKeys, ...unrelatedKeys].map((key) => redis.set(key, '1')));
+    try {
+      await runSeed(() => {});
+      expect(await redis.exists(...replacedKeys)).toBe(0);
+      expect(await redis.exists(...unrelatedKeys)).toBe(unrelatedKeys.length);
+    } finally {
+      await redis.del(...replacedKeys, ...unrelatedKeys);
+      await resetTables(prisma);
+    }
+  }, 180_000);
 });

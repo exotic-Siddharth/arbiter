@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
+import { parsePageParam } from '@/lib/page';
 
 export type FilterValues<K extends string> = Record<K, string>;
 
@@ -36,8 +37,7 @@ export function useUrlFilters<K extends string>(defaults: FilterValues<K>): UrlF
     return result;
   }, [searchParams]);
 
-  const rawPage = Number(searchParams.get('page'));
-  const page = Number.isInteger(rawPage) && rawPage > 1 ? rawPage : 1;
+  const page = parsePageParam(searchParams.get('page'));
 
   const set = useCallback<UrlFilters<K>['set']>(
     (patch, options) => {

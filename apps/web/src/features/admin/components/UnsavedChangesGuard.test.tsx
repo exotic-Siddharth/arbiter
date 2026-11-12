@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createMemoryRouter, Link, RouterProvider } from 'react-router';
+import { createBrowserRouter, createMemoryRouter, Link, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { ContestForm } from './ContestForm';
 import { ProblemDetailsForm } from './ProblemDetailsForm';
@@ -100,6 +100,61 @@ describe('unsaved-changes guard on the admin forms', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Create problem' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/created'));
+  });
+
+  // Browser history traverses asynchronously (popstate arrives later), unlike memory history:
+  // a reset() after proceed() would re-block the re-sent Back and reopen the dialog for ever.
+  describe('with real (async) browser history', () => {
+    function renderBrowser() {
+      window.history.replaceState(null, '', '/elsewhere');
+      const router = createBrowserRouter([
+        {
+          path: '/edit',
+          element: (
+            <>
+              <Link to="/elsewhere">Leave</Link>
+              <ProblemDetailsForm
+                reference={problemReference(undefined)}
+                isNew
+                onSave={() => Promise.resolve()}
+              />
+            </>
+          ),
+        },
+        { path: '/elsewhere', element: <p>Elsewhere</p> },
+      ]);
+      render(<RouterProvider router={router} />);
+      return router;
+    }
+
+    it('browser Back then Discard leaves the page', async () => {
+      const user = userEvent.setup();
+      const router = renderBrowser();
+      await act(() => router.navigate('/edit'));
+      await user.type(await screen.findByLabelText(/^Title/), 'x');
+      act(() => window.history.back());
+      await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+      expect(await screen.findByText('Elsewhere')).toBeInTheDocument();
+      // Let any re-sent traversal settle: the dialog must not come back.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(router.state.location.pathname).toBe('/elsewhere');
+      expect(window.location.pathname).toBe('/elsewhere');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      router.dispose();
+    });
+
+    it('a link click then Discard leaves the page', async () => {
+      const user = userEvent.setup();
+      const router = renderBrowser();
+      await act(() => router.navigate('/edit'));
+      await user.type(await screen.findByLabelText(/^Title/), 'x');
+      await user.click(screen.getByRole('link', { name: 'Leave' }));
+      await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+      expect(await screen.findByText('Elsewhere')).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/elsewhere');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      router.dispose();
+    });
   });
 
   it('guards the contest form too', async () => {

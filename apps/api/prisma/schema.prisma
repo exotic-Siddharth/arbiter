@@ -189,6 +189,7 @@ model Submission {
   @@index([contestId, createdAt])
   @@index([createdAt])
   @@index([verdict, userId, problemId])
+  @@index([status, createdAt])
 }
 
 model SubmissionTestResult {

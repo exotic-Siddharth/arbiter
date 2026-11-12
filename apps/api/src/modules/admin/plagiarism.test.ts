@@ -248,4 +248,53 @@ describe('admin plagiarism routes', () => {
     expect(scores).toEqual([...scores].sort((x, y) => y - x));
     expect(scores[0]).toBeCloseTo(0.5 + (total - 1) / (total * 4), 10);
   });
+
+  it('GET /:id reads a bounded number of pair rows however many are stored', async () => {
+    const { contest, problem, a, b } = await contestWithCopies();
+    const report = await prisma.plagiarismReport.create({
+      data: { contestId: contest.id, status: 'DONE' },
+    });
+    const total = MAX_DETAIL_PAIRS * 5;
+    const pair = (similarity: number, submissionBId: string) => ({
+      reportId: report.id,
+      problemId: problem.id,
+      submissionAId: a.id,
+      submissionBId,
+      similarity,
+      matchedLinesA: [1],
+      matchedLinesB: [1],
+    });
+    // Three deleted pairs at the top force one refill; the kept pairs are the next 200 by score.
+    await prisma.plagiarismPair.createMany({
+      data: [
+        ...[0.999, 0.998, 0.997].map((s) => pair(s, 'deleted-submission')),
+        ...Array.from({ length: total }, (_, i) => pair(0.5 + i / (total * 4), b.id)),
+      ],
+    });
+    const rowsRead: number[] = [];
+    const findMany = prisma.plagiarismPair.findMany.bind(prisma.plagiarismPair);
+    const spy = vi.spyOn(prisma.plagiarismPair, 'findMany').mockImplementation(((
+      args: Parameters<typeof findMany>[0],
+    ) =>
+      findMany(args).then((rows) => {
+        rowsRead.push(rows.length);
+        return rows;
+      })) as never);
+    let res;
+    try {
+      res = await request(app).get(`/api/admin/plagiarism/${report.id}`).set(authHeader(admin));
+    } finally {
+      spy.mockRestore();
+    }
+    expect(res.status).toBe(200);
+    const detail = PlagiarismReportDetailSchema.parse(res.body);
+    expect(detail.pairCount).toBe(total + 3);
+    expect(detail.pairs).toHaveLength(MAX_DETAIL_PAIRS);
+    expect(detail.pairs.every((p) => p.b.submissionId === b.id)).toBe(true);
+    const scores = detail.pairs.map((p) => p.similarity);
+    expect(scores[0]).toBeCloseTo(0.5 + (total - 1) / (total * 4), 10);
+    expect(scores.at(-1)).toBeCloseTo(0.5 + (total - MAX_DETAIL_PAIRS) / (total * 4), 10);
+    const sum = rowsRead.reduce((x, y) => x + y, 0);
+    expect(sum).toBeLessThanOrEqual(3 * MAX_DETAIL_PAIRS);
+  });
 });
