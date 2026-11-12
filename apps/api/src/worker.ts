@@ -7,12 +7,15 @@ import { QUEUE_NAMES } from './judge/queue';
 import { createWorkers, startMetricsServer } from './judge/workers';
 import { closeAll } from './lib/lifecycle';
 import { logger } from './lib/logger';
+import { prisma } from './db/prisma';
+import { purgeRefreshTokens } from './modules/auth/tokens';
 
 /**
  * Worker process: BullMQ consumers for `judge`, `run` and `plagiarism` (spec section 8.8), its
  * own /metrics on WORKER_METRICS_PORT (R8), the heartbeat (judge:worker:<id>) and the janitor
  * that removes sandbox containers left over by crashed workers (R17). The queue wiring and the
- * metrics server live in judge/workers.ts; the sweep also ends rows whose job was lost (A-06).
+ * metrics server live in judge/workers.ts; the sweep also ends rows whose job was lost (A-06)
+ * and purges expired and revoked refresh-token rows.
  * Owner: lane A2.
  */
 const log = logger.child({ proc: 'worker', workerId: WORKER_ID });
@@ -31,6 +34,12 @@ async function sweep(): Promise<void> {
     await reconcileStuckRows();
   } catch (error) {
     log.warn({ err: (error as Error).message }, 'reconciler failed');
+  }
+  try {
+    const purged = await purgeRefreshTokens(prisma);
+    if (purged > 0) log.info({ purged }, 'purged expired and revoked refresh tokens');
+  } catch (error) {
+    log.warn({ err: (error as Error).message }, 'refresh-token purge failed');
   }
 }
 

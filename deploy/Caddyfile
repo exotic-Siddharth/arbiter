@@ -1,0 +1,6 @@
+# Optional TLS front for the `caddy` profile of docker-compose.prod.yml. Caddy obtains and renews a
+# Let's Encrypt certificate for $DOMAIN (ports 80 and 443 must reach this host and the DNS record must
+# point here), then proxies everything, including the Socket.IO WebSocket, to the nginx web tier.
+{$DOMAIN} {
+	reverse_proxy web:8080
+}
