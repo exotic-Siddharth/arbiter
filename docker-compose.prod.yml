@@ -1,0 +1,201 @@
+# Arbiter production stack (DESIGN.md section 17, docs/DEPLOYMENT.md): one Linux VM.
+#
+#   cp .env.production.example .env.production      # then fill in the blanks
+#   docker build -t arbiter-sandbox:latest sandbox  # the judge image, built on the HOST
+#   docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+#
+# postgres, redis    named volumes; reachable only on the internal `backend` network
+# api                migrates the database on start, then serves REST + Socket.IO on 4000 (not published)
+# worker             same image as api; judges submissions by starting sandbox containers through the
+#                    host's Docker socket (root-equivalent on the host: read docs/DEPLOYMENT.md)
+# web                nginx: the SPA plus the /api and /socket.io proxy; the only published port, bound to
+#                    loopback by default because TLS must be terminated in front of it
+# caddy              optional TLS front (profile `tls`): add `--profile tls` to the up command
+name: arbiter
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: '10m', max-file: '5' }
+
+x-app-env: &app-env
+  NODE_ENV: production
+  WEB_ORIGIN: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN in .env.production (the https:// address users open)}
+  DATABASE_URL: postgresql://arbiter:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}@postgres:5432/arbiter?schema=public
+  REDIS_URL: redis://redis:6379/0
+  QUEUE_PREFIX: arbiter
+  # One proxy hop (the web container) in front of the API; the web container sets X-Forwarded-For.
+  TRUST_PROXY: '1'
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env.production (openssl rand -base64 48)}
+  COOKIE_SECURE: 'true'
+  DEMO_LOGIN_ENABLED: ${DEMO_LOGIN_ENABLED:-false}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: arbiter
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: arbiter
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U arbiter -d arbiter']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    # noeviction: BullMQ and the scoreboard keep real data in Redis and must never lose keys to memory pressure.
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    volumes:
+      - redisdata:/data
+    networks: [backend]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+    logging: *logging
+
+  api:
+    image: arbiter-api:${ARBITER_TAG:-latest}
+    build:
+      context: .
+      dockerfile: deploy/api.Dockerfile
+    environment:
+      <<: *app-env
+      API_PORT: '4000'
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [frontend, backend]
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:4000/readyz').then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # The first start applies every migration before the server listens.
+      start_period: 60s
+    stop_grace_period: 15s
+    restart: unless-stopped
+    logging: *logging
+
+  worker:
+    image: arbiter-api:${ARBITER_TAG:-latest}
+    pull_policy: never # built by the api service above
+    command: ['node', 'dist/worker.js']
+    environment:
+      <<: *app-env
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-arbiter-sandbox:latest}
+      SANDBOX_RUNTIME: ${SANDBOX_RUNTIME:-}
+      DOCKER_BIN: docker
+      JUDGE_CONCURRENCY: ${JUDGE_CONCURRENCY:-2}
+      RUN_CONCURRENCY: ${RUN_CONCURRENCY:-1}
+      WORKER_METRICS_PORT: '9464'
+    volumes:
+      # ROOT-EQUIVALENT ON THE HOST: whoever controls this process can start any container.
+      # Run the judge on a dedicated VM (docs/DEPLOYMENT.md, "Security").
+      - /var/run/docker.sock:/var/run/docker.sock
+    # The container user is not root: it joins the host's docker group to use the socket.
+    group_add:
+      ['${DOCKER_GID:?set DOCKER_GID in .env.production (stat -c %g /var/run/docker.sock)}']
+    depends_on:
+      api: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [backend]
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:9464/metrics').then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # worker.close() lets in-flight jobs finish for up to 30 s.
+    stop_grace_period: 45s
+    restart: unless-stopped
+    logging: *logging
+
+  web:
+    image: arbiter-web:${ARBITER_TAG:-latest}
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+      args:
+        # Compiled into the bundle: changing it needs a rebuild (`up -d --build`).
+        VITE_DEMO_LOGIN: ${VITE_DEMO_LOGIN:-false}
+    depends_on:
+      api: { condition: service_healthy }
+    ports:
+      - '${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:8080'
+    networks: [frontend]
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:8080/']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: [tls]
+    environment:
+      # Required for this profile; an empty value makes Caddy refuse its Caddyfile (compose would otherwise
+      # demand it even when the profile is off).
+      DOMAIN: ${DOMAIN:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    depends_on:
+      web: { condition: service_healthy }
+    networks: [frontend]
+    restart: unless-stopped
+    logging: *logging
+
+networks:
+  frontend: {}
+  # No route to the outside world: Postgres and Redis cannot be reached from, or reach, the internet.
+  backend:
+    internal: true
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:

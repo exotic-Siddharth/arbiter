@@ -67,6 +67,19 @@ describe('niceMax', () => {
 });
 
 describe('AdminUsersPage', () => {
+  it('tells admins when a role change takes effect', async () => {
+    mockFetch({
+      'GET /api/admin/users': () =>
+        jsonResponse(200, { items: [adminUserRow()], total: 1, page: 1, pageSize: 25 }),
+    });
+    renderWithProviders(<AdminUsersPage />, { route: '/admin/users', user: adminUser });
+    expect(
+      await screen.findByText(
+        /Demotions apply at once\. Promotions apply at the user's next sign-in or token refresh/,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('confirms before changing a role and sends PATCH with the new role', async () => {
     const api = mockFetch({
       'GET /api/admin/users': () =>

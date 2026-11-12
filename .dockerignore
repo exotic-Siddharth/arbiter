@@ -1,0 +1,22 @@
+# Build context for deploy/api.Dockerfile and deploy/web.Dockerfile (context = repo root).
+# Keeps the context small and keeps local secrets out of image layers.
+**/node_modules
+**/dist
+**/coverage
+**/playwright-report
+**/test-results
+**/blob-report
+**/*.log
+.git
+.github
+.vscode
+.idea
+**/.env
+**/.env.*
+!**/.env.example
+# Not needed by any image: hidden tests (~93 MB), sandbox sources, docs, scripts.
+seed
+sandbox
+docs
+scripts
+apps/api/data

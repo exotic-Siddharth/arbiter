@@ -131,3 +131,26 @@ export async function rotateRefreshToken(
     refreshToken: next.token,
   };
 }
+
+/**
+ * Housekeeping for the RefreshToken table (run from the worker's periodic sweep). Deletes
+ *  - every row that has expired: it can never be used again; and
+ *  - every revoked row whose family has no live token left (a logged-out session, or one ended
+ *    by reuse detection): there is nothing left to protect, a replay is a plain 401.
+ * A revoked row of a family that still has a live token is kept until it expires, so replaying
+ * a rotated token keeps revoking the family (reuse detection). Returns the number of rows deleted.
+ */
+export function purgeRefreshTokens(prisma: PrismaClient, now: Date = clock.now()): Promise<number> {
+  return prisma.$executeRaw`
+    DELETE FROM "RefreshToken" AS t
+    WHERE t."expiresAt" < ${now}
+       OR (
+         t."revokedAt" IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM "RefreshToken" AS live
+           WHERE live."familyId" = t."familyId"
+             AND live."revokedAt" IS NULL
+             AND live."expiresAt" >= ${now}
+         )
+       )`;
+}

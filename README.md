@@ -32,3 +32,11 @@ npm run typecheck && npm run lint && npm run format:check
 npm test                    # unit + integration (needs Postgres and Redis)
 npm run test:sandbox        # real-Docker judge tests (needs the sandbox image)
 ```
+
+## Deployment and CI
+
+`docker-compose.prod.yml` runs Postgres, Redis, the API, the judge worker and an nginx web tier on one
+Linux VM; [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) is the step-by-step guide, including why the worker
+cannot run on serverless hosts and why its Docker socket makes the VM root-equivalent (use a dedicated
+VM). `.env.production.example` lists every setting. `.github/workflows/ci.yml` defines the CI jobs (lint
+and typecheck, integration, sandbox, Playwright e2e); it has not run on GitHub yet.

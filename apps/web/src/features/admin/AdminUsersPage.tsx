@@ -74,6 +74,9 @@ export function Component() {
       description="Search users and change roles. Admins can manage problems, contests and users."
     >
       <div className="space-y-4">
+        <p className="text-sm text-muted">
+          Demotions apply at once. Promotions apply at the user's next sign-in or token refresh.
+        </p>
         <Input
           aria-label="Search users"
           placeholder="Search by username or email"
