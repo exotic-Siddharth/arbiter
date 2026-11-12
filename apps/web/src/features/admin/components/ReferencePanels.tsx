@@ -106,6 +106,8 @@ function ValidationResult({ run }: { run: ValidationRun }) {
 
 export interface ValidatePanelProps {
   problemId: string;
+  /** What a result is computed for (reference, limits, tests): a result for other inputs is dropped. */
+  inputsKey: string;
   /** The editor holds changes that are not saved yet: the server judges the stored solution. */
   dirty: boolean;
   hasReference: boolean;
@@ -113,15 +115,23 @@ export interface ValidatePanelProps {
 }
 
 /** Validate: enqueue a REFERENCE submission and watch it like any submission. */
-export function ValidatePanel({ problemId, dirty, hasReference, testCount }: ValidatePanelProps) {
-  const [submissionId, setSubmissionId] = useState<string | null>(null);
+export function ValidatePanel({
+  problemId,
+  inputsKey,
+  dirty,
+  hasReference,
+  testCount,
+}: ValidatePanelProps) {
+  const [started, setStarted] = useState<{ submissionId: string; inputsKey: string } | null>(null);
+  // A verdict on other code, limits or tests than the current ones is not shown.
+  const submissionId = started?.inputsKey === inputsKey ? started.submissionId : null;
   const { run } = useValidationRun(submissionId);
   const start = useMutation({
-    mutationFn: () =>
+    mutationFn: (_key: string) =>
       api.post(`/admin/problems/${problemId}/validate-reference`, undefined, {
         schema: ValidateReferenceResponseSchema,
       }),
-    onSuccess: (result) => setSubmissionId(result.submissionId),
+    onSuccess: (result, key) => setStarted({ submissionId: result.submissionId, inputsKey: key }),
     onError: (error) => toastError(error, 'Could not start the validation'),
   });
   const running = start.isPending || (run !== null && !run.finished);
@@ -145,7 +155,7 @@ export function ValidatePanel({ problemId, dirty, hasReference, testCount }: Val
             leftIcon={<ShieldCheck />}
             loading={running}
             disabled={blocked !== null}
-            onClick={() => start.mutate()}
+            onClick={() => start.mutate(inputsKey)}
           >
             {run ? 'Validate again' : 'Validate'}
           </Button>
@@ -171,21 +181,30 @@ function jobDone(job: AdminJob | undefined): boolean {
 
 export interface GeneratePanelProps {
   problemId: string;
+  /** As in ValidatePanel, without the expected outputs (the job itself rewrites them). */
+  inputsKey: string;
   dirty: boolean;
   hasReference: boolean;
   testCount: number;
 }
 
 /** Generate outputs: run the reference on every input and overwrite expectedOutput. */
-export function GeneratePanel({ problemId, dirty, hasReference, testCount }: GeneratePanelProps) {
+export function GeneratePanel({
+  problemId,
+  inputsKey,
+  dirty,
+  hasReference,
+  testCount,
+}: GeneratePanelProps) {
   const queryClient = useQueryClient();
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [started, setStarted] = useState<{ jobId: string; inputsKey: string } | null>(null);
+  const jobId = started?.inputsKey === inputsKey ? started.jobId : null;
   const start = useMutation({
-    mutationFn: () =>
+    mutationFn: (_key: string) =>
       api.post(`/admin/problems/${problemId}/generate-outputs`, undefined, {
         schema: GenerateOutputsResponseSchema,
       }),
-    onSuccess: (result) => setJobId(result.jobId),
+    onSuccess: (result, key) => setStarted({ jobId: result.jobId, inputsKey: key }),
     onError: (error) => toastError(error, 'Could not start output generation'),
   });
 
@@ -226,7 +245,7 @@ export function GeneratePanel({ problemId, dirty, hasReference, testCount }: Gen
             leftIcon={<Cog />}
             loading={running}
             disabled={blocked !== null}
-            onClick={() => start.mutate()}
+            onClick={() => start.mutate(inputsKey)}
           >
             Generate outputs
           </Button>

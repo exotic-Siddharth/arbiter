@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { resetTables, setupTestDatabase } from '../../test/db';
 import { authHeader, createProblem, createUser, TEST_PASSWORD } from '../../test/factories';
 import { createApp } from '../app';
+import { toAppError } from './error';
 
 // Postgres text cannot hold U+0000 (error 22021): request input carrying one is a client error.
 const NUL = String.fromCharCode(0);
@@ -74,5 +75,68 @@ describe('NUL bytes in request input', () => {
         tags: [],
       });
     expectBadRequest(res);
+  });
+});
+
+// A lone UTF-16 surrogate has no UTF-8 form: Prisma rejects the query (InvalidArg, "unexpected end
+// of hex escape"), so it must be a client error too, never a 500 with error-level logs.
+const LONE = String.fromCharCode(0xd800);
+
+describe('unpaired UTF-16 surrogates in request input', () => {
+  it('POST /api/auth/register with a lone surrogate in the username is a 400', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'lone@example.com', username: `ab${LONE}c`, password: TEST_PASSWORD });
+    expectBadRequest(res);
+  });
+
+  it('POST /api/auth/login with a lone surrogate in the identifier is a 400', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ identifier: `a${LONE}`, password: TEST_PASSWORD });
+    expectBadRequest(res);
+  });
+
+  it('PATCH /api/users/me with a lone surrogate in the bio is a 400', async () => {
+    const res = await request(app)
+      .patch('/api/users/me')
+      .set(authHeader(user))
+      .send({ bio: `hi${LONE}` });
+    expectBadRequest(res);
+  });
+
+  it('POST /api/submissions with a lone surrogate in the source code or slug is a 400', async () => {
+    const problem = await createProblem(prisma);
+    for (const body of [
+      { language: 'PYTHON', sourceCode: `print(1)${LONE}`, problemSlug: problem.slug },
+      { language: 'PYTHON', sourceCode: 'print(1)', problemSlug: `${problem.slug}${LONE}` },
+    ]) {
+      expectBadRequest(
+        await request(app).post('/api/submissions').set(authHeader(user)).send(body),
+      );
+    }
+  });
+
+  it('a problem slug param that is not valid UTF-8 (an encoded lone surrogate) is a 400', async () => {
+    expectBadRequest(await request(app).get('/api/problems/a%ED%A0%80'));
+  });
+
+  it('a well-formed surrogate pair (an emoji) is still accepted', async () => {
+    const res = await request(app)
+      .patch('/api/users/me')
+      .set(authHeader(user))
+      .send({ bio: `hi ${String.fromCodePoint(0x1f600)}` });
+    expect(res.status).toBe(200);
+  });
+
+  it('toAppError maps a Prisma invalid-encoding error that slips past zod to 400', async () => {
+    const error = await prisma.user.findFirst({ where: { username: `a${LONE}` } }).then(
+      () => undefined,
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeDefined();
+    const appError = toAppError(error);
+    expect(appError.status).toBe(400);
+    expect(appError.code).toBe('VALIDATION_ERROR');
   });
 });

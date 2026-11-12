@@ -55,10 +55,10 @@ export function Component() {
         slug={slug}
         page={page}
         notStarted={boundary?.phase === 'UPCOMING'}
-        onPageChange={(next) => {
+        onPageChange={(next, options) => {
           const search = new URLSearchParams(params);
           search.set('page', String(next));
-          setParams(search);
+          setParams(search, { replace: options?.replace });
         }}
         tableClassName="max-h-[calc(100dvh-15rem)] min-h-48"
       />

@@ -1,6 +1,7 @@
 import { AdminContestSchema, type AdminContestBody } from '@arbiter/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Page } from '@/components/layout/Page';
 import { Badge, ButtonLink, QueryState, Skeleton } from '@/components/ui';
@@ -12,6 +13,10 @@ import { ContestForm } from './ContestForm';
 import { contestToForm } from '../lib/contestForm';
 
 const PENDING_POLL_MS = 5_000;
+/** Re-read this long after the next start or end, so the server's status has changed by then. */
+const BOUNDARY_MARGIN_MS = 2_000;
+/** setTimeout's longest delay; a later boundary just re-schedules after the early re-read. */
+const MAX_TIMEOUT_MS = 2_147_483_647;
 
 const BACK = (
   <Link to="/admin/contests" className="inline-flex items-center gap-1.5 hover:text-foreground">
@@ -39,6 +44,24 @@ export function ExistingContest({ id }: { id: string }) {
     // Re-read while counted submissions are judged, so Apply ratings enables itself afterwards.
     refetchInterval: (q) => (q.state.data?.pendingSubmissions ? PENDING_POLL_MS : false),
   });
+
+  // The status is computed by the server at fetch time: re-read at the next boundary (the end of a
+  // running contest, the start of an upcoming one) so the badge and Apply ratings follow it. If
+  // the server still reports the old status (clock skew), the new data schedules another try.
+  const { refetch, dataUpdatedAt } = contest;
+  const status = contest.data?.status;
+  const boundary =
+    status === 'RUNNING'
+      ? contest.data?.endsAt
+      : status === 'UPCOMING'
+        ? contest.data?.startsAt
+        : undefined;
+  useEffect(() => {
+    if (!boundary) return undefined;
+    const delay = Math.max(Date.parse(boundary) - Date.now(), 0) + BOUNDARY_MARGIN_MS;
+    const timer = setTimeout(() => void refetch(), Math.min(delay, MAX_TIMEOUT_MS));
+    return () => clearTimeout(timer);
+  }, [boundary, dataUpdatedAt, refetch]);
 
   const save = async (body: AdminContestBody) => {
     await api.put(`/admin/contests/${id}`, body);

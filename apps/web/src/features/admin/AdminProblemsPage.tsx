@@ -27,6 +27,7 @@ import { api } from '@/lib/api';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { qk } from '@/lib/queryKeys';
 import { toast, toastError } from '@/lib/toast';
+import { useClampPage } from '@/lib/useClampPage';
 import { useListParams } from './hooks/useListParams';
 
 const PAGE_SIZE = 20;
@@ -44,6 +45,7 @@ export function Component() {
       api.get('/admin/problems', { query, schema: AdminProblemPageSchema, signal }),
     placeholderData: (previous) => previous,
   });
+  useClampPage(problems.data, problems.isPlaceholderData, setPage);
 
   const remove = useMutation({
     mutationFn: (problem: AdminProblemSummary) => api.delete<void>(`/admin/problems/${problem.id}`),
@@ -78,7 +80,7 @@ export function Component() {
           <QueryState
             query={problems}
             loading={<TableSkeleton rows={8} columns={6} />}
-            isEmpty={(data) => data.items.length === 0}
+            isEmpty={(data) => data.items.length === 0 && data.total === 0}
             empty={
               <EmptyState
                 icon={<FileCode />}

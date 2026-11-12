@@ -26,6 +26,7 @@ import { api } from '@/lib/api';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { qk } from '@/lib/queryKeys';
 import { toast, toastError } from '@/lib/toast';
+import { useClampPage } from '@/lib/useClampPage';
 import { ContestStatusBadge } from '@/features/contests/components/ContestStatusBadge';
 import { useListParams } from './hooks/useListParams';
 
@@ -44,6 +45,7 @@ export function Component() {
       api.get('/admin/contests', { query, schema: AdminContestPageSchema, signal }),
     placeholderData: (previous) => previous,
   });
+  useClampPage(contests.data, contests.isPlaceholderData, setPage);
 
   const remove = useMutation({
     mutationFn: (contest: AdminContestSummary) => api.delete<void>(`/admin/contests/${contest.id}`),
@@ -79,7 +81,7 @@ export function Component() {
           <QueryState
             query={contests}
             loading={<TableSkeleton rows={6} columns={6} />}
-            isEmpty={(data) => data.items.length === 0}
+            isEmpty={(data) => data.items.length === 0 && data.total === 0}
             empty={
               <EmptyState
                 icon={<Trophy />}

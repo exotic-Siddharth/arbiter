@@ -1,11 +1,12 @@
 import {
+  AdminTestListSchema,
   LANGUAGES,
   LANGUAGE_IDS,
   SourceCodeSchema,
   type AdminProblem,
   type Language,
 } from '@arbiter/shared';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { CodeEditor } from '@/components/CodeEditor';
 import { Alert, Button, Card, CardContent, CardHeader, Select } from '@/components/ui';
@@ -19,7 +20,8 @@ const LANGUAGE_OPTIONS = LANGUAGE_IDS.map((id) => ({ value: id, label: LANGUAGES
 
 /**
  * Reference tab: Monaco for the reference solution, then Validate and Generate outputs. Kept
- * mounted across refetches: unsaved code is compared with the latest saved `problem`.
+ * mounted across refetches: unsaved code is compared with the latest saved `problem`, and clean
+ * code follows it.
  */
 export function ProblemReferenceTab({
   problem,
@@ -31,15 +33,53 @@ export function ProblemReferenceTab({
 }) {
   const queryClient = useQueryClient();
   const savedLanguage: Language = problem.referenceLanguage ?? 'CPP';
-  const savedSource = problem.referenceSolution ?? '';
+  const savedSource = problem.referenceSolution || LANGUAGES[savedLanguage].template;
   const [language, setLanguage] = useState<Language>(savedLanguage);
-  const [source, setSource] = useState<string>(savedSource || LANGUAGES[savedLanguage].template);
+  const [source, setSource] = useState<string>(savedSource);
   const [error, setError] = useState<string | null>(null);
+  // The saved code the editor last loaded (as ProblemDetailsForm's version). When the server's
+  // copy changes (a save here or elsewhere), clean code re-reads it; edits are kept, and catch up
+  // once they match it.
+  const [synced, setSynced] = useState({ language: savedLanguage, source: savedSource });
+  if (synced.language !== savedLanguage || synced.source !== savedSource) {
+    const clean = language === synced.language && source === synced.source;
+    const caughtUp = language === savedLanguage && source === savedSource;
+    if (clean || caughtUp) {
+      setSynced({ language: savedLanguage, source: savedSource });
+      setLanguage(savedLanguage);
+      setSource(savedSource);
+    }
+  }
+
+  // What a verdict was computed for: the stored reference, the limits and checker, and the tests
+  // (the same list query as the Tests tab). A panel drops its result when these change.
+  const tests = useQuery({
+    queryKey: qk.admin.problems.tests(problem.id),
+    queryFn: ({ signal }) =>
+      api.get(`/admin/problems/${problem.id}/tests`, { schema: AdminTestListSchema, signal }),
+  });
+  const judged = [
+    problem.referenceLanguage,
+    problem.referenceSolution,
+    problem.timeLimitMs,
+    problem.memoryLimitMb,
+    problem.testCount,
+  ];
+  const inputs = tests.data?.map((test) => [test.id, test.inputBytes, test.inputPreview]);
+  const outputs = tests.data?.map((test) => [test.expectedOutputBytes, test.expectedOutputPreview]);
+  // Generating outputs rewrites the expected outputs, so only validation depends on them.
+  const generateKey = JSON.stringify([...judged, inputs]);
+  const validateKey = JSON.stringify([
+    ...judged,
+    problem.checker,
+    problem.floatTolerance,
+    inputs,
+    outputs,
+  ]);
 
   const hasReference =
     problem.referenceSolution !== null && problem.referenceSolution.trim() !== '';
-  const dirty =
-    language !== savedLanguage || source !== (savedSource || LANGUAGES[savedLanguage].template);
+  const dirty = language !== savedLanguage || source !== savedSource;
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -127,12 +167,14 @@ export function ProblemReferenceTab({
       <div className="grid gap-5 xl:grid-cols-2">
         <ValidatePanel
           problemId={problem.id}
+          inputsKey={validateKey}
           dirty={dirty || unsavedTemplate}
           hasReference={hasReference}
           testCount={problem.testCount}
         />
         <GeneratePanel
           problemId={problem.id}
+          inputsKey={generateKey}
           dirty={dirty || unsavedTemplate}
           hasReference={hasReference}
           testCount={problem.testCount}

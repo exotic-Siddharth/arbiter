@@ -31,6 +31,7 @@ import { api } from '@/lib/api';
 import { formatDate, formatNumber } from '@/lib/format';
 import { qk } from '@/lib/queryKeys';
 import { toast, toastError } from '@/lib/toast';
+import { useClampPage } from '@/lib/useClampPage';
 import { useCurrentUser } from '@/stores/auth';
 import { useListParams } from './hooks/useListParams';
 
@@ -50,6 +51,7 @@ export function Component() {
       api.get('/admin/users', { query, schema: AdminUserPageSchema, signal }),
     placeholderData: (previous) => previous,
   });
+  useClampPage(users.data, users.isPlaceholderData, setPage);
 
   const changeRole = useMutation({
     mutationFn: ({ user, role }: { user: AdminUser; role: Role }) =>
@@ -84,7 +86,7 @@ export function Component() {
           <QueryState
             query={users}
             loading={<TableSkeleton rows={8} columns={6} />}
-            isEmpty={(data) => data.items.length === 0}
+            isEmpty={(data) => data.items.length === 0 && data.total === 0}
             empty={
               <EmptyState
                 icon={<Users />}

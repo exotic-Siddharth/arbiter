@@ -15,8 +15,26 @@ import { countedWhere, invalidateScoreboard, loadStandings } from './scoreboard'
 
 /** Admin contest CRUD and rating (spec section 10, /api/admin/contests). Owner: lane A3b. */
 
-/** One write pair per participant: allow large contests more than Prisma's 5 s default. */
-const RATE_TRANSACTION_OPTIONS = { timeout: 60_000, maxWait: 10_000 };
+/**
+ * One write pair per participant: allow large contests more than Prisma's 5 s default. The
+ * rated-contest guards use it too: they may wait for a rating in flight (see lockContests).
+ */
+export const RATE_TRANSACTION_OPTIONS = { timeout: 60_000, maxWait: 10_000 };
+
+/**
+ * Locks the contest rows (SELECT ... FOR UPDATE, in id order) and returns their latest committed
+ * ratedAt. The rating apply, the contest PUT and the problem DELETE all take this lock inside
+ * their transaction before checking ratedAt: a guard that starts while a rating is open waits for
+ * it and then sees the contest as rated, and a rating that starts after a guard's write sees it.
+ */
+export async function lockContests(
+  tx: Prisma.TransactionClient,
+  ids: string[],
+): Promise<{ id: string; ratedAt: Date | null }[]> {
+  if (ids.length === 0) return [];
+  return tx.$queryRaw<{ id: string; ratedAt: Date | null }[]>`
+    SELECT id, "ratedAt" FROM "Contest" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`;
+}
 
 const adminInclude = {
   _count: { select: { registrations: true } },
@@ -63,7 +81,10 @@ const countPending = (client: Prisma.TransactionClient | PrismaClient, contestId
 const isUniqueViolation = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 
-async function assertProblemsExist(prisma: PrismaClient, body: AdminContestBody): Promise<void> {
+async function assertProblemsExist(
+  prisma: Pick<PrismaClient, 'problem'>,
+  body: AdminContestBody,
+): Promise<void> {
   const ids = body.problems.map((p) => p.problemId);
   if (ids.length === 0) return;
   const found = await prisma.problem.findMany({ where: { id: { in: ids } }, select: { id: true } });
@@ -183,31 +204,32 @@ export async function updateAdminContest(
   id: string,
   body: AdminContestBody,
 ): Promise<AdminContest> {
-  const existing = await prisma.contest.findUnique({
-    where: { id },
-    select: {
-      ratedAt: true,
-      startsAt: true,
-      endsAt: true,
-      penaltyMinutes: true,
-      problems: { orderBy: { ordinal: 'asc' }, select: { problemId: true, label: true } },
-    },
-  });
-  if (!existing) throw notFound('Contest not found');
-  // The ratings were computed from the final standings: what defines them stays fixed.
-  if (existing.ratedAt && changesRatedStandings(existing, body)) {
-    throw conflict('A rated contest keeps its times, penalty and problems');
-  }
-  await assertProblemsExist(prisma, body);
   try {
     const row = await prisma.$transaction(async (tx) => {
+      // Under the contest lock: a rating in flight finishes first, and its ratedAt is seen here.
+      if ((await lockContests(tx, [id])).length === 0) throw notFound('Contest not found');
+      const existing = await tx.contest.findUniqueOrThrow({
+        where: { id },
+        select: {
+          ratedAt: true,
+          startsAt: true,
+          endsAt: true,
+          penaltyMinutes: true,
+          problems: { orderBy: { ordinal: 'asc' }, select: { problemId: true, label: true } },
+        },
+      });
+      // The ratings were computed from the final standings: what defines them stays fixed.
+      if (existing.ratedAt && changesRatedStandings(existing, body)) {
+        throw conflict('A rated contest keeps its times, penalty and problems');
+      }
+      await assertProblemsExist(tx, body);
       await tx.contestProblem.deleteMany({ where: { contestId: id } });
       return tx.contest.update({
         where: { id },
         data: { ...contestData(body), problems: { create: problemRows(body) } },
         include: adminInclude,
       });
-    });
+    }, RATE_TRANSACTION_OPTIONS);
     await invalidateScoreboard(id);
     return toAdminContest(row, await countPending(prisma, id));
   } catch (error) {
@@ -246,6 +268,10 @@ export async function rateContest(prisma: PrismaClient, id: string): Promise<Rat
     // Ratings are absolute values shared across contests: apply one contest at a time (the lock
     // ends with the transaction), so concurrent calls neither lose an update nor deadlock on rows.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('arbiter:rate-contest'))`;
+    // The contest row lock serialises the rating with the rated-contest guards (lockContests).
+    const [locked] = await lockContests(tx, [id]);
+    if (!locked) throw notFound('Contest not found');
+    if (locked.ratedAt) throw conflict('The contest is already rated');
     // Provisional standings must never become final: wait until every counted submission has a verdict.
     const judging = await countPending(tx, id);
     if (judging > 0) throw conflict(`Judging is still in progress (${judging} submissions)`);

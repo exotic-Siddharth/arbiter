@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Id, IsoDateTime, RoleSchema, USERNAME_PATTERN } from './common';
+import { Id, isPgText, IsoDateTime, PG_TEXT_MESSAGE, RoleSchema, USERNAME_PATTERN } from './common';
 import { LIMITS } from './constants';
 
 export const UsernameSchema = z
@@ -7,15 +7,23 @@ export const UsernameSchema = z
   .trim()
   .min(LIMITS.usernameMinChars, `Username must be at least ${LIMITS.usernameMinChars} characters`)
   .max(LIMITS.usernameMaxChars, `Username must be at most ${LIMITS.usernameMaxChars} characters`)
-  .regex(USERNAME_PATTERN, 'Username may contain only letters, digits and underscores');
+  .regex(USERNAME_PATTERN, 'Username may contain only letters, digits and underscores')
+  .refine(isPgText, PG_TEXT_MESSAGE);
 
 /** Trimmed and lower-cased (emails are stored lower-case). */
-export const EmailSchema = z.string().trim().toLowerCase().email('Enter a valid email').max(254);
+export const EmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email('Enter a valid email')
+  .max(254)
+  .refine(isPgText, PG_TEXT_MESSAGE);
 
 export const PasswordSchema = z
   .string()
   .min(LIMITS.passwordMinChars, `Password must be at least ${LIMITS.passwordMinChars} characters`)
-  .max(LIMITS.passwordMaxChars, `Password must be at most ${LIMITS.passwordMaxChars} characters`);
+  .max(LIMITS.passwordMaxChars, `Password must be at most ${LIMITS.passwordMaxChars} characters`)
+  .refine(isPgText, PG_TEXT_MESSAGE);
 
 /** POST /api/auth/register */
 export const RegisterBody = z.object({
@@ -27,8 +35,17 @@ export type RegisterBody = z.infer<typeof RegisterBody>;
 
 /** POST /api/auth/login: identifier is an email or a username. */
 export const LoginBody = z.object({
-  identifier: z.string().trim().min(1, 'Enter your email or username').max(254),
-  password: z.string().min(1, 'Enter your password').max(LIMITS.passwordMaxChars),
+  identifier: z
+    .string()
+    .trim()
+    .min(1, 'Enter your email or username')
+    .max(254)
+    .refine(isPgText, PG_TEXT_MESSAGE),
+  password: z
+    .string()
+    .min(1, 'Enter your password')
+    .max(LIMITS.passwordMaxChars)
+    .refine(isPgText, PG_TEXT_MESSAGE),
 });
 export type LoginBody = z.infer<typeof LoginBody>;
 
