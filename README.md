@@ -267,3 +267,7 @@ whole codebase through six lenses (sandbox, auth and API, contests, data, fronte
 confirmed findings, 58 were fixed (3 of them partly) and 1 was skipped, each fix with a regression test.
 Two adversarial rounds over the fixes found 17 and then 6 further issues, all fixed. One finding (A-33,
 above) was left to the author's decision.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
