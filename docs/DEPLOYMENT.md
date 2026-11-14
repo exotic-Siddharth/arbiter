@@ -256,11 +256,12 @@ about 528 MiB, so memory is the constraint. What that deployment does on top of 
 
   `sudo systemctl enable --now block-metadata`. The host itself can still reach the metadata service.
 - **Security updates with a night-time reboot.** `unattended-upgrades` installs security updates daily
-  and reboots at night when one needs it (in `/etc/apt/apt.conf.d/50unattended-upgrades`:
-  `Unattended-Upgrade::Automatic-Reboot "true";` and `Unattended-Upgrade::Automatic-Reboot-Time "04:00";`).
-  Every service has `restart: unless-stopped`, so the stack comes back on its own after the reboot.
+  and reboots at night when one needs it, set in a drop-in file `/etc/apt/apt.conf.d/52arbiter-reboot`:
+  `Unattended-Upgrade::Automatic-Reboot "true";` and `Unattended-Upgrade::Automatic-Reboot-Time "21:30";`.
+  The VM clock is UTC, so 21:30 is 03:00 in India, where most visitors are. Every service has
+  `restart: unless-stopped`, so the stack comes back on its own after the reboot.
 - **A nightly `pg_dump`, seven days kept.** A root cron entry runs the backup command from
-  [Operating it](#operating-it) into `/var/backups/arbiter/arbiter-$(date +%F).dump` every night and then
+  [Operating it](#operating-it) into `/var/backups/arbiter/arbiter-$(date +%F).dump` at 21:00 UTC and then
   deletes dumps older than seven days (`find /var/backups/arbiter -name 'arbiter-*.dump' -mtime +6 -delete`).
   Copy them off the VM as well: a dump on the same disk does not survive losing the VM.
 - **The demo data.** Unlike a real deployment ([step 6](#6-create-the-first-admin-and-add-problems)),
@@ -268,11 +269,8 @@ about 528 MiB, so memory is the constraint. What that deployment does on top of 
   button works. A production seed run today (`NODE_ENV=production`) requires `SEED_ADMIN_PASSWORD` for
   `admin`, and gives the `demo` account and the 30 synthetic users random passwords that are never
   printed, so nobody can sign in as a synthetic user; `demo` is reached only through the button.
-  Development seeds keep `demo12345` for both. The live demo was seeded before that change (DESIGN.md,
-  Decisions log, 2026-11-14), so its database still stores `demo12345` hashes for `demo` and the
-  synthetic users: anyone can sign in as one of them and edit its bio (only `demo` is protected) until
-  the live database is reseeded with `NODE_ENV=production` (which replaces all its data) or those
-  accounts' password hashes are reset.
+  Development seeds keep `demo12345` for both. The live demo was reseeded this way on 2026-11-14, after
+  that change, so none of its accounts accepts `demo12345` and `admin` has its own random password.
 
 ## Why serverless hosts cannot run the worker
 
