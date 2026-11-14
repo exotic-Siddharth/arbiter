@@ -4,11 +4,13 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { resetTables, setupTestDatabase } from '../../test/db';
 import { createContest } from '../../test/factories';
+import { env } from '../config/env';
+import { verifyPassword } from '../lib/password';
 import { getRedis } from '../lib/redis';
 import { fingerprints, similarity, tokenize } from '../modules/plagiarism/winnow';
 import { GEN_COMMAND, SeedDataError, assertHiddenTests, lf } from './problems';
 import { createRng } from './rng';
-import { clearScoreboardCaches, runSeed } from './run';
+import { SEED_ADMIN, clearScoreboardCaches, credentialLines, runSeed, seedPasswords } from './run';
 import { simulateContest, simulatePractice, type SimProblem } from './simulate';
 import {
   breakSource,
@@ -225,8 +227,56 @@ describe('clearScoreboardCaches', () => {
       await runSeed(() => {});
       expect(await redis.exists(...replacedKeys)).toBe(0);
       expect(await redis.exists(...unrelatedKeys)).toBe(unrelatedKeys.length);
+      // Outside production the synthetic users keep the published demo password.
+      const synthetic = await prisma.user.findUniqueOrThrow({ where: { usernameLower: 'dp_dragon' } });
+      expect(await verifyPassword(synthetic.passwordHash, env.SEED_DEMO_PASSWORD)).toBe(true);
     } finally {
       await redis.del(...replacedKeys, ...unrelatedKeys);
+      await resetTables(prisma);
+    }
+  }, 180_000);
+});
+
+describe('seed passwords', () => {
+  it('development keeps the published demo password for demo and the synthetic users', () => {
+    expect(seedPasswords(false)).toEqual({
+      demo: env.SEED_DEMO_PASSWORD,
+      synthetic: env.SEED_DEMO_PASSWORD,
+    });
+    expect(credentialLines(false).join('\n')).toContain(env.SEED_DEMO_PASSWORD);
+  });
+
+  it('production gives demo and the synthetic users random passwords, new on every run', () => {
+    const a = seedPasswords(true);
+    const b = seedPasswords(true);
+    for (const password of [a.demo, a.synthetic]) {
+      expect(password).not.toBe(env.SEED_DEMO_PASSWORD);
+      expect(password.length).toBeGreaterThanOrEqual(32);
+    }
+    expect(a.demo).not.toBe(a.synthetic);
+    expect(b.demo).not.toBe(a.demo);
+    expect(b.synthetic).not.toBe(a.synthetic);
+    // Nothing printed in production names a password.
+    const printed = credentialLines(true).join('\n');
+    expect(printed).not.toContain(env.SEED_DEMO_PASSWORD);
+    expect(printed).not.toContain(env.SEED_ADMIN_PASSWORD ?? 'admin12345');
+  });
+
+  it('a production seed: demo and synthetic users refuse the demo password, admin keeps its own', async () => {
+    const prisma = await setupTestDatabase();
+    try {
+      await runSeed(() => {}, { production: true });
+      const users = await prisma.user.findMany({
+        where: { usernameLower: { in: ['admin', 'demo', 'dp_dragon'] } },
+      });
+      const hashOf = (name: string) => users.find((u) => u.usernameLower === name)?.passwordHash;
+      expect(users).toHaveLength(3);
+      expect(await verifyPassword(hashOf('demo') ?? '', env.SEED_DEMO_PASSWORD)).toBe(false);
+      expect(await verifyPassword(hashOf('dp_dragon') ?? '', env.SEED_DEMO_PASSWORD)).toBe(false);
+      expect(
+        await verifyPassword(hashOf(SEED_ADMIN.username) ?? '', env.SEED_ADMIN_PASSWORD ?? ''),
+      ).toBe(true);
+    } finally {
       await resetTables(prisma);
     }
   }, 180_000);

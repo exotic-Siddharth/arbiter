@@ -111,6 +111,8 @@ export function dockerRunArgs(options: {
     '1',
     '--pids-limit',
     '128',
+    '--oom-score-adj',
+    '500',
     '--cap-drop',
     'ALL',
     '--cap-add',

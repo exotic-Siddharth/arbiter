@@ -4,6 +4,9 @@ An online judge with live programming contests: untrusted C++, Python, Java and 
 a hardened, throwaway Docker container per submission, and the verdict streams to the browser test by
 test.
 
+**Live demo:** <https://20-205-104-24.sslip.io> (use the "Try the demo" button; it is hosted on a small
+Azure VM, so the first load can be slow).
+
 ![The problem workspace after an Accepted submission: statement, Monaco editor and the live verdict](docs/screenshots/hero.png)
 
 More screens (light and dark themes, admin pages, plagiarism view, mobile) are in
@@ -68,8 +71,9 @@ the contest's times, penalty and problems afterwards.
 
 **Sessions.** The access token lives only in memory (15 minutes); the refresh token is an httpOnly,
 SameSite=Strict cookie scoped to `/api/auth`, rotated on every use, with reuse detection that revokes
-the whole token family. Passwords use Argon2id; a login for an unknown account verifies a dummy hash, so
-timing does not reveal which accounts exist. Admin rights are re-checked in the database on every
+the whole token family (except a replay within 30 s whose successor was never used: a lost refresh
+response gets a fresh successor instead of a sign-out). Passwords use Argon2id; a login for an unknown
+account verifies a dummy hash, so timing does not reveal which accounts exist. Admin rights are re-checked in the database on every
 request, so a demotion applies at once.
 
 **Plagiarism detection.** Winnowing as in MOSS: tokens are normalised (identifiers, numbers and strings
@@ -152,7 +156,8 @@ upcoming) and about 1,100 historical submissions; [seed/problems/README.md](seed
 describes the problem folders, and [docs/ADDING-PROBLEMS.md](docs/ADDING-PROBLEMS.md) explains how to
 add problems, one at a time or as a larger set.
 
-Seed accounts, for local development only (a production start refuses the default admin password):
+Seed accounts, for local development only (a production start refuses the default admin password, and a
+production seed gives `demo` and the synthetic users random passwords that are never printed):
 
 | Username | Password | Role |
 | --- | --- | --- |

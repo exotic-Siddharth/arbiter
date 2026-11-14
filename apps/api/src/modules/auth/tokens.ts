@@ -3,7 +3,7 @@ import type { PrismaClient, RefreshToken, User } from '@prisma/client';
 import { env } from '../../config/env';
 import { unauthorized } from '../../lib/errors';
 import { signAccessToken } from '../../lib/jwt';
-import { DAY_MS, clock } from '../../lib/time';
+import { DAY_MS, SECOND_MS, clock } from '../../lib/time';
 
 /** Where a refresh token was issued from (stored for the user's records, never logged). */
 export interface TokenMeta {
@@ -83,10 +83,50 @@ export async function revokeByToken(prisma: PrismaClient, token: string): Promis
 const INVALID = 'Invalid refresh token';
 
 /**
+ * How long after a rotation the old token may be presented again when the response carrying its
+ * successor was lost (flaky networks): the unused successor is revoked and a fresh one is issued
+ * in the same family. Only while the successor has never been used; otherwise it is reuse.
+ */
+export const REFRESH_GRACE_MS = 30 * SECOND_MS;
+
+/**
+ * The grace re-issue for a rotated token: when `current` was rotated less than REFRESH_GRACE_MS
+ * ago and its successor is still live and unused (not revoked, never rotated), that successor is
+ * revoked and a fresh one is issued in the family. The claim on the successor is conditional, so
+ * concurrent replays cannot both win. Returns null when the grace does not apply (or the race was
+ * lost): the caller treats that as reuse.
+ */
+async function graceReissue(
+  prisma: PrismaClient,
+  current: RefreshToken,
+  now: Date,
+  meta: TokenMeta,
+): Promise<IssuedRefreshToken | null> {
+  const { revokedAt, replacedById } = current;
+  if (!revokedAt || !replacedById) return null; // revoked by logout or reuse, not rotated
+  if (now.getTime() - revokedAt.getTime() >= REFRESH_GRACE_MS) return null;
+  if (current.expiresAt <= now) return null;
+  return prisma.$transaction(async (tx) => {
+    const claimed = await tx.refreshToken.updateMany({
+      where: { id: replacedById, revokedAt: null, replacedById: null, expiresAt: { gt: now } },
+      data: { revokedAt: now },
+    });
+    if (claimed.count !== 1) return null;
+    const issued = await createRecord(tx, current.userId, current.familyId, meta);
+    await tx.refreshToken.update({
+      where: { id: current.id },
+      data: { replacedById: issued.record.id },
+    });
+    return issued;
+  });
+}
+
+/**
  * Rotates a refresh token: the presented token is revoked and a new one in the same family is
  * issued. Presenting a token that is already revoked or rotated is reuse: the whole family is
- * revoked and the call fails with 401. The claim on the old token is a conditional update inside
- * a transaction, so two concurrent rotations of one token cannot both win.
+ * revoked and the call fails with 401. The one exception is the grace window for a lost
+ * response (see REFRESH_GRACE_MS and graceReissue). The claim on the old token is a conditional
+ * update inside a transaction, so two concurrent rotations of one token cannot both win.
  */
 export async function rotateRefreshToken(
   prisma: PrismaClient,
@@ -98,11 +138,13 @@ export async function rotateRefreshToken(
     include: { user: true },
   });
   if (!current) throw unauthorized(INVALID);
+  const now = clock.now();
   if (current.revokedAt) {
+    const reissued = await graceReissue(prisma, current, now, meta);
+    if (reissued) return session(current.user, reissued);
     await revokeFamily(prisma, current.familyId);
     throw unauthorized(INVALID);
   }
-  const now = clock.now();
   if (current.expiresAt <= now) throw unauthorized(INVALID);
 
   const next = await prisma.$transaction(async (tx) => {
@@ -124,13 +166,14 @@ export async function rotateRefreshToken(
     throw unauthorized(INVALID);
   }
 
-  const { user } = current;
-  return {
-    user,
-    accessToken: signAccessToken({ id: user.id, username: user.username, role: user.role }),
-    refreshToken: next.token,
-  };
+  return session(current.user, next);
 }
+
+const session = (user: User, next: IssuedRefreshToken): RotatedSession => ({
+  user,
+  accessToken: signAccessToken({ id: user.id, username: user.username, role: user.role }),
+  refreshToken: next.token,
+});
 
 /**
  * Housekeeping for the RefreshToken table (run from the worker's periodic sweep). Deletes

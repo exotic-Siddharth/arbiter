@@ -104,8 +104,39 @@ describe('docker-compose.prod.yml', () => {
     expect(compose).not.toMatch(/\$\{(JWT_ACCESS_SECRET|POSTGRES_PASSWORD):-/);
   });
 
+  it('keeps postgres and redis out of the OOM killer’s way (a runaway sandbox goes first)', () => {
+    // The lines of one service: from "  <name>:" up to the next top-level or service key.
+    const service = (name: string) => {
+      const lines = compose.split(/\r?\n/);
+      const start = lines.indexOf(`  ${name}:`);
+      expect(start).toBeGreaterThan(-1);
+      const rest = lines.slice(start + 1);
+      const end = rest.findIndex((line) => /^ {0,2}\S/.test(line));
+      return (end === -1 ? rest : rest.slice(0, end)).join('\n');
+    };
+    expect(service('postgres')).toMatch(/^ {4}oom_score_adj: -500$/m);
+    expect(service('redis')).toMatch(/^ {4}oom_score_adj: -500$/m);
+  });
+
   it('keeps rate limiting and secure cookies on', () => {
     expect(compose).toMatch(/COOKIE_SECURE: 'true'/);
     expect(compose).not.toMatch(/RATE_LIMITS_ENABLED/);
+  });
+});
+
+describe('deploy/nginx.conf', () => {
+  const nginx = repoFile('deploy/nginx.conf');
+
+  it('gzips the fonts it serves (the Monaco codicon font is a 150 KB .ttf)', () => {
+    const gzipTypes = /^\s*gzip_types([^;]*);/m.exec(nginx)?.[1].split(/\s+/) ?? [];
+    expect(gzipTypes).toEqual(
+      expect.arrayContaining(['font/ttf', 'font/otf', 'application/vnd.ms-fontobject']),
+    );
+  });
+
+  it('names a type for .ttf and .otf (the image’s mime.types has none: octet-stream is not gzipped)', () => {
+    const types = /^types\s*\{([^}]*)\}/m.exec(nginx)?.[1] ?? '';
+    expect(types).toMatch(/\bfont\/ttf\s+ttf\s*;/);
+    expect(types).toMatch(/\bfont\/otf\s+otf\s*;/);
   });
 });

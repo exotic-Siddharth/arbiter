@@ -49,7 +49,7 @@ docker run --rm -i --init --pull never
   --label arbiter.prefix=<QUEUE_PREFIX> --label arbiter.worker=<workerId>
   --network none --read-only
   --tmpfs /work:rw,exec,nosuid,size=128m --tmpfs /tmp:rw,nosuid,size=32m
-  --memory <M>m --memory-swap <M>m --cpus 1 --pids-limit 128
+  --memory <M>m --memory-swap <M>m --cpus 1 --pids-limit 128 --oom-score-adj 500
   --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add KILL
   --security-opt no-new-privileges --ulimit core=0 --ulimit nofile=256:256
   [--runtime $SANDBOX_RUNTIME] arbiter-sandbox:latest
@@ -62,6 +62,7 @@ docker run --rm -i --init --pull never
 | `--memory` = `--memory-swap` | Memory bombs: the cgroup limit `M` = problem limit + language overhead + 256 MB, capped at 2048 MB, with no swap. |
 | `--cpus 1` | One job taking more than one CPU of the host. |
 | `--pids-limit 128` | Fork bombs. |
+| `--oom-score-adj 500` | A sandbox taking the host down: when the VM itself runs out of memory (a 1 GB VM can hold one sandbox of about 528 MiB), the kernel kills the sandbox before anything else. Production compose gives `postgres` and `redis` `oom_score_adj: -500`. |
 | `--cap-drop ALL` plus three capabilities | The harness keeps only SETUID and SETGID (to drop to the `runner` user) and KILL (to kill runner processes). The program runs as uid 10001 and has no capabilities at all. |
 | `--security-opt no-new-privileges` | Regaining privileges through setuid binaries. |
 | `--init` | tini is PID 1 and reaps zombies; the program cannot signal PID 1. |

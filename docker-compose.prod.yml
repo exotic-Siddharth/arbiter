@@ -46,6 +46,8 @@ services:
       timeout: 5s
       retries: 12
       start_period: 15s
+    # The kernel OOM killer picks a runaway sandbox (--oom-score-adj 500) long before the database.
+    oom_score_adj: -500
     restart: unless-stopped
     logging: *logging
 
@@ -62,6 +64,7 @@ services:
       timeout: 3s
       retries: 12
       start_period: 5s
+    oom_score_adj: -500
     restart: unless-stopped
     logging: *logging
 
