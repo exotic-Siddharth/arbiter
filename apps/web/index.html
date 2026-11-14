@@ -9,12 +9,50 @@
       name="description"
       content="Arbiter is an online judge: solve original algorithmic problems in the browser, get judged in a locked-down Docker sandbox, and compete in live ICPC-style contests."
     />
+    <!-- Search engines and link previews (LinkedIn, WhatsApp, X). The origin is VITE_PUBLIC_ORIGIN, set at
+         build time; nginx ends the canonical link and og:url with the page asked for (deploy/nginx.conf). -->
+    <link rel="canonical" href="%VITE_PUBLIC_ORIGIN%/__ARBITER_PATH__" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Arbiter" />
+    <meta property="og:title" content="Arbiter: online judge and live programming contests" />
+    <meta
+      property="og:description"
+      content="Arbiter is an online judge: solve original algorithmic problems in the browser, get judged in a locked-down Docker sandbox, and compete in live ICPC-style contests."
+    />
+    <meta property="og:url" content="%VITE_PUBLIC_ORIGIN%/__ARBITER_PATH__" />
+    <meta property="og:image" content="%VITE_PUBLIC_ORIGIN%/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Arbiter: a code editor with an Accepted verdict next to a problem statement"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Arbiter: online judge and live programming contests" />
+    <meta
+      name="twitter:description"
+      content="Arbiter is an online judge: solve original algorithmic problems in the browser, get judged in a locked-down Docker sandbox, and compete in live ICPC-style contests."
+    />
+    <meta name="twitter:image" content="%VITE_PUBLIC_ORIGIN%/og-image.png" />
+    <meta
+      name="twitter:image:alt"
+      content="Arbiter: a code editor with an Accepted verdict next to a problem statement"
+    />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- Applies the stored theme before first paint. External file: the production CSP allows script-src 'self' only. -->
     <script src="/theme-init.js"></script>
     <title>Arbiter</title>
   </head>
   <body>
+    <noscript>
+      <p>
+        Arbiter is an online judge and live programming-contest platform. Solve original algorithmic
+        problems in C++, Python, Java or JavaScript, have every submission judged against hidden
+        tests in a locked-down Docker sandbox, and compete in ICPC-style contests with a live
+        scoreboard. Turn on JavaScript to use the site.
+      </p>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -25,6 +25,14 @@ import { submissionSummarySelect, toSubmissionSummary } from '../submissions/map
 type Viewer = AuthUser | undefined;
 const isAdmin = (viewer: Viewer) => viewer?.role === 'ADMIN';
 
+/** The contests anyone, signed out included, may open at /contests/:slug (also the sitemap's). */
+export const PUBLIC_CONTESTS = { isPublished: true } satisfies Prisma.ContestWhereInput;
+
+/** Whether the viewer may see a visible contest's problems: from startsAt on, or as an admin. */
+export function problemsVisible(contest: { startsAt: Date }, viewer: Viewer, now: Date): boolean {
+  return isAdmin(viewer) || now.getTime() >= contest.startsAt.getTime();
+}
+
 const summaryInclude = (viewer: Viewer) =>
   ({
     _count: { select: { problems: true, registrations: true } },
@@ -81,7 +89,7 @@ export async function listContests(
   const now = clock.now();
   const { where, orderBy } = statusWhere(status, now);
   const contests = await prisma.contest.findMany({
-    where: { ...where, isPublished: true },
+    where: { ...where, ...PUBLIC_CONTESTS },
     orderBy: [...orderBy, { id: 'asc' }],
     include: summaryInclude(viewer),
   });
@@ -146,9 +154,8 @@ export async function getContestDetail(
       },
     },
   });
-  const showProblems = isAdmin(viewer) || now.getTime() >= contest.startsAt.getTime();
   let problems: ContestProblemItem[] | null = null;
-  if (showProblems) {
+  if (problemsVisible(contest, viewer, now)) {
     const stats = await problemStats(prisma, contest.id, viewer);
     problems = contest.problems.map((cp) => {
       const s = stats.get(cp.problemId);
@@ -201,7 +208,7 @@ export async function getContestProblem(
   viewer: Viewer,
 ): Promise<ProblemDetail> {
   const contest = await findVisibleContest(prisma, slug, viewer);
-  if (!isAdmin(viewer) && clock.now().getTime() < contest.startsAt.getTime()) {
+  if (!problemsVisible(contest, viewer, clock.now())) {
     throw notFound('The contest has not started yet');
   }
   const link = await prisma.contestProblem.findUnique({

@@ -22,6 +22,7 @@ import { router as healthRouter } from './modules/health/routes';
 import { router as problemsRouter } from './modules/problems/routes';
 import { router as tagsRouter } from './modules/problems/tags.routes';
 import { router as runsRouter } from './modules/runs/routes';
+import { router as seoRouter } from './modules/seo/routes';
 import { router as statsRouter } from './modules/stats/routes';
 import { router as submissionsRouter } from './modules/submissions/routes';
 import { router as leaderboardRouter } from './modules/users/leaderboard.routes';
@@ -35,6 +36,8 @@ export interface CreateAppOptions {
   redis?: Redis;
   /** Defaults to env RATE_LIMITS_ENABLED (R2). e.g. false, or { submissions: false }. */
   rateLimits?: RateLimitsConfig;
+  /** Defaults to env WEB_ORIGIN. The absolute URLs of /robots.txt and /sitemap.xml start with it. */
+  publicOrigin?: string;
 }
 
 /** R5: the test-case routes get their own 20 MB parser (modules/admin/problems.routes.ts). */
@@ -79,6 +82,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
     prisma: options.prisma ?? defaultPrisma,
     redis: options.redis ?? getRedis(),
     rateLimits: options.rateLimits ?? env.RATE_LIMITS_ENABLED,
+    publicOrigin: (options.publicOrigin ?? env.WEB_ORIGIN).replace(/\/+$/, ''),
   };
   Object.assign(app.locals, deps);
 
@@ -102,6 +106,8 @@ export function createApp(options: CreateAppOptions = {}): Express {
 
   // /healthz, /readyz, /metrics
   app.use(healthRouter);
+  // /robots.txt, /sitemap.xml
+  app.use(seoRouter);
 
   app.use('/api', apiRateLimit);
   app.get('/api/openapi.json', (_req, res) => {

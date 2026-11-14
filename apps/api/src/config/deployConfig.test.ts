@@ -118,6 +118,10 @@ describe('docker-compose.prod.yml', () => {
     expect(service('redis')).toMatch(/^ {4}oom_score_adj: -500$/m);
   });
 
+  it('builds the web image with the public origin (the link-preview tags are absolute URLs)', () => {
+    expect(compose).toMatch(/^ {8}VITE_PUBLIC_ORIGIN: \$\{PUBLIC_ORIGIN:\?[^}]*\}$/m);
+  });
+
   it('keeps rate limiting and secure cookies on', () => {
     expect(compose).toMatch(/COOKIE_SECURE: 'true'/);
     expect(compose).not.toMatch(/RATE_LIMITS_ENABLED/);
@@ -138,5 +142,45 @@ describe('deploy/nginx.conf', () => {
     const types = /^types\s*\{([^}]*)\}/m.exec(nginx)?.[1] ?? '';
     expect(types).toMatch(/\bfont\/ttf\s+ttf\s*;/);
     expect(types).toMatch(/\bfont\/otf\s+otf\s*;/);
+  });
+
+  it('proxies /robots.txt and /sitemap.xml to the api, outside the SPA policy', () => {
+    for (const path of ['/robots.txt', '/sitemap.xml']) {
+      const block = new RegExp(
+        `location = ${path.replace('.', '\\.')} \\{\\s*proxy_pass \\$api;\\s*\\}`,
+      );
+      expect(nginx, path).toMatch(block);
+    }
+    const exempt = /^\s*~(\S+) "";$/m.exec(nginx)?.[1] ?? '';
+    for (const path of ['/robots.txt', '/sitemap.xml', '/api/x', '/healthz']) {
+      expect(new RegExp(exempt).test(path), path).toBe(true);
+    }
+    expect(new RegExp(exempt).test('/problems/robots.txt')).toBe(false);
+  });
+
+  it('caches /og-image.png like the other unhashed public files', () => {
+    expect(nginx).toMatch(/location ~ \^\/\([^)]*og-image\\.png[^)]*\)\$ \{\s*expires 1h;/);
+  });
+
+  it('names the requested page in the canonical link and og:url, with only safe characters', () => {
+    expect(nginx).toMatch(/sub_filter '\/__ARBITER_PATH__' \$page_path;/);
+    expect(nginx).toMatch(/sub_filter_once off;/);
+    const map = /map \$request_uri \$page_path \{([^}]*)\}/.exec(nginx)?.[1] ?? '';
+    expect(map).toMatch(/default\s+"\/";/);
+    const pattern = /"~(\S+)"\s+\$path;/.exec(map)?.[1] ?? '';
+    const pagePath = (uri: string) => new RegExp(pattern).exec(uri)?.groups?.path ?? '/';
+    expect(pagePath('/problems/two-sum')).toBe('/problems/two-sum');
+    expect(pagePath('/contests/weekly-1/problems/A?tab=x')).toBe('/contests/weekly-1/problems/A');
+    expect(pagePath('/problems/%22%3E%3Cscript%3E')).toBe('/');
+    expect(pagePath('/a"b')).toBe('/');
+  });
+});
+
+describe('deploy/web.Dockerfile', () => {
+  const dockerfile = repoFile('deploy/web.Dockerfile');
+
+  it('compiles VITE_PUBLIC_ORIGIN into the build', () => {
+    expect(dockerfile).toMatch(/^ARG VITE_PUBLIC_ORIGIN$/m);
+    expect(dockerfile).toMatch(/^ENV VITE_PUBLIC_ORIGIN=\$\{VITE_PUBLIC_ORIGIN\}$/m);
   });
 });

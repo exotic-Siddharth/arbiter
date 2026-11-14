@@ -64,7 +64,12 @@ const SPEC_ROUTES = [
 ];
 
 /** Routes the build added beyond section 10 (see the Decisions log). */
-const EXTRA_ROUTES = ['POST /api/auth/demo', 'GET /api/admin/problems/:id/tests/:testId'];
+const EXTRA_ROUTES = [
+  'POST /api/auth/demo',
+  'GET /api/admin/problems/:id/tests/:testId',
+  'GET /robots.txt',
+  'GET /sitemap.xml',
+];
 
 const app = createApp();
 

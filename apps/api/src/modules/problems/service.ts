@@ -67,8 +67,11 @@ function statusFilter(
   }
 }
 
+/** The problems anyone, signed out included, may open at /problems/:slug (also the sitemap's). */
+export const PUBLIC_PROBLEMS = { isPublished: true } satisfies Prisma.ProblemWhereInput;
+
 function listWhere(query: ListProblemsQuery, userId: string | undefined): Prisma.ProblemWhereInput {
-  const and: Prisma.ProblemWhereInput[] = [{ isPublished: true }];
+  const and: Prisma.ProblemWhereInput[] = [PUBLIC_PROBLEMS];
   if (query.search) {
     and.push({
       OR: [

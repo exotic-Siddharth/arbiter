@@ -100,7 +100,7 @@ until you do):
 
 | Variable             | What to put                                                                                                  |
 | -------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `PUBLIC_ORIGIN`      | The `https://` address users open, with no trailing slash. It is the CORS and cookie origin.                 |
+| `PUBLIC_ORIGIN`      | The `https://` address users open, with no trailing slash. CORS and cookie origin; base of the sitemap URLs. |
 | `POSTGRES_PASSWORD`  | `openssl rand -hex 24`. URL-safe characters only: it is embedded in `DATABASE_URL`.                          |
 | `JWT_ACCESS_SECRET`  | `openssl rand -base64 48`. The API refuses to start with a short secret or a published development value.   |
 | `DOCKER_GID`         | `stat -c %g /var/run/docker.sock`, so the non-root worker can use the socket.                               |
@@ -114,7 +114,8 @@ admin password. A unit test (`apps/api/src/config/deployConfig.test.ts`) checks 
 the example does not document.
 
 `VITE_DEMO_LOGIN` is compiled into the web bundle, so changing it needs `up -d --build`. Leave the demo
-login off on a public site.
+login off on a public site. The same goes for `PUBLIC_ORIGIN`, which the web image also receives at build
+time (see "Search engines and link previews").
 
 ### 4. TLS in front of nginx
 
@@ -212,6 +213,44 @@ Compose recreates only the services whose image changed. The new `api` applies p
 it serves traffic. Migrations are forward-only: take a `pg_dump` before upgrading, because rolling back means
 restoring it. The worker stops gracefully (it lets running jobs finish, 30 s cap), and the API drains on
 SIGTERM. `docker compose ... down` keeps the volumes; add `-v` only when you mean to delete the data.
+
+## Search engines and link previews
+
+**What crawlers get.** nginx proxies two files to the api, both cached for an hour
+(`Cache-Control: public, max-age=3600`):
+
+- `/robots.txt` allows everything except `/admin` (the only signed-in-only area of the SPA) and ends with
+  `Sitemap: <PUBLIC_ORIGIN>/sitemap.xml`. `/api/` and `/assets/` stay open: Google runs the JavaScript and
+  needs those requests to render a page.
+- `/sitemap.xml` lists the landing page, `/problems`, `/contests`, `/leaderboard`, every published problem,
+  every published contest, and the problem pages of published contests that have started, with `<lastmod>`
+  from the row's `updatedAt`. It uses the same visibility rules as the public API routes, so it never lists
+  a draft problem, the problems of a contest that has not started, an unpublished contest, or a user's page.
+
+Both build their absolute URLs from the API's origin setting (`WEB_ORIGIN`, which the compose file sets to
+`PUBLIC_ORIGIN`) on every request. `apps/web/index.html` carries a meta description, Open Graph and Twitter
+card tags with the 1200x630 `/og-image.png` (regenerate it with `npm run og-image`), a canonical link and a
+`<noscript>` summary. Its absolute URLs are compiled in from `PUBLIC_ORIGIN` (the web image's
+`VITE_PUBLIC_ORIGIN` build argument), and nginx ends the canonical link and `og:url` with the path that was
+asked for, so every page names itself rather than the landing page. **When `PUBLIC_ORIGIN` changes (a custom
+domain, say), rebuild the web image:** `up -d --build`. The api picks the new value up on restart.
+
+**Google Search Console.** Once the site is up on its final address:
+
+1. Open [Google Search Console](https://search.google.com/search-console), add a property and choose
+   **URL prefix** with the exact `PUBLIC_ORIGIN` (for example `https://judge.example.com/`).
+2. Verify ownership. **HTML tag**: add the `<meta name="google-site-verification" ...>` line Google gives
+   you to the `<head>` of `apps/web/index.html` and rebuild the web image. **HTML file**: put the
+   `google<code>.html` file in `apps/web/public/` (nginx serves files that exist before falling back to
+   `index.html`) and rebuild. Then click **Verify**. Keep the tag or file in place: Google checks it again from time to time.
+3. Under **Sitemaps**, submit `<PUBLIC_ORIGIN>/sitemap.xml`.
+4. Paste the landing page address into the **URL inspection** bar and click **Request indexing**.
+
+Indexing usually takes a few days and is up to Google: a new site may appear for a search of its name first
+and for other searches much later, or not at all. **URL inspection** shows when Google last crawled a page and
+how it rendered it. To check link previews, paste the address into LinkedIn's
+[Post Inspector](https://www.linkedin.com/post-inspector/); it also refreshes LinkedIn's cached preview after
+the image changes.
 
 ## Operating it on a small VM
 
