@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin, type ProxyOptions } from 'vite';
+import { publicOrigin } from './publicOrigin';
 
 const WEB_DIR = fileURLToPath(new URL('.', import.meta.url));
 const SRC_DIR = fileURLToPath(new URL('./src', import.meta.url));
@@ -24,8 +25,11 @@ export default defineConfig(({ mode }) => {
     process.env.API_PROXY_TARGET ?? fileEnv.API_PROXY_TARGET ?? 'http://localhost:4000';
   const port = Number(process.env.WEB_PORT ?? fileEnv.WEB_PORT ?? 5173);
   // The absolute URLs of the link-preview tags (%VITE_PUBLIC_ORIGIN% in index.html). The web image
-  // gets PUBLIC_ORIGIN as a build argument; without one (local dev) they name this server.
-  process.env.VITE_PUBLIC_ORIGIN ||= fileEnv.VITE_PUBLIC_ORIGIN || `http://localhost:${port}`;
+  // requires PUBLIC_ORIGIN as a build argument; without one (local dev) they name this server.
+  process.env.VITE_PUBLIC_ORIGIN = publicOrigin(
+    process.env.VITE_PUBLIC_ORIGIN || fileEnv.VITE_PUBLIC_ORIGIN,
+    port,
+  );
 
   // Same-origin in the browser: REST and the Socket.IO websocket both go through this proxy, and
   // the api's robots.txt and sitemap, as in production (deploy/nginx.conf).

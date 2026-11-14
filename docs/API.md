@@ -85,7 +85,7 @@ seconds) and `details.retryAfterSec`.
 
 | Limit | Window | Key |
 | --- | --- | --- |
-| all `/api` routes: 300 | 1 minute | client IP (IPv6 by /64 prefix) |
+| all `/api` routes and `/sitemap.xml`: 300 | 1 minute | client IP (IPv6 by /64 prefix) |
 | login and demo login: 10 | 15 minutes | client IP + identifier |
 | registration: 5 | 1 hour | client IP |
 | `POST /api/submissions`: 6 | 1 minute | user |

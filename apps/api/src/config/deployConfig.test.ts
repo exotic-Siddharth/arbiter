@@ -183,4 +183,16 @@ describe('deploy/web.Dockerfile', () => {
     expect(dockerfile).toMatch(/^ARG VITE_PUBLIC_ORIGIN$/m);
     expect(dockerfile).toMatch(/^ENV VITE_PUBLIC_ORIGIN=\$\{VITE_PUBLIC_ORIGIN\}$/m);
   });
+
+  it('refuses to build without VITE_PUBLIC_ORIGIN (the tags would name http://localhost)', () => {
+    const lines = dockerfile.split(/\r?\n/);
+    const guard = lines.findIndex((line) => /^RUN test -n "\$VITE_PUBLIC_ORIGIN" \|\|/.test(line));
+    expect(guard).toBeGreaterThan(lines.indexOf('ENV VITE_PUBLIC_ORIGIN=${VITE_PUBLIC_ORIGIN}'));
+    expect(guard).toBeLessThan(lines.indexOf('RUN npm run build -w @arbiter/web'));
+    expect(lines[guard]).toMatch(/exit 1/);
+  });
+
+  it('has no literal "\\n" (a heredoc slip): the usage example copies as a working command', () => {
+    expect(dockerfile).not.toContain('\\n');
+  });
 });

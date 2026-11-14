@@ -2,7 +2,8 @@
 # Web image (DESIGN.md section 17): the Vite build served by unprivileged nginx with deploy/nginx.conf.
 # Build context: the repository root.
 #
-#   docker build -f deploy/web.Dockerfile --build-arg VITE_PUBLIC_ORIGIN=https://judge.example.com \n#     --build-arg VITE_DEMO_LOGIN=false -t arbiter-web .
+#   docker build -f deploy/web.Dockerfile --build-arg VITE_PUBLIC_ORIGIN=https://judge.example.com \
+#     --build-arg VITE_DEMO_LOGIN=false -t arbiter-web .
 ARG NODE_IMAGE=node:22-alpine
 ARG NGINX_IMAGE=nginxinc/nginx-unprivileged:1.31-alpine
 
@@ -22,6 +23,8 @@ ENV VITE_DEMO_LOGIN=${VITE_DEMO_LOGIN}
 # The public origin (PUBLIC_ORIGIN): the absolute URLs of the link-preview tags in index.html.
 ARG VITE_PUBLIC_ORIGIN
 ENV VITE_PUBLIC_ORIGIN=${VITE_PUBLIC_ORIGIN}
+# Required: without it vite.config.ts falls back to http://localhost, which must never ship.
+RUN test -n "$VITE_PUBLIC_ORIGIN" || { echo "Set --build-arg VITE_PUBLIC_ORIGIN=https://..." >&2; exit 1; }
 RUN npm run build -w @arbiter/web
 
 FROM ${NGINX_IMAGE} AS runtime

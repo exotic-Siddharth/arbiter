@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { resetTables, setupTestDatabase } from '../../../test/db';
 import { createContest, createProblem } from '../../../test/factories';
 import { createApp } from '../../app';
+import { RATE_LIMITS } from '../../lib/rateLimit';
 import { sitemapXml } from './sitemap';
 
 const HOUR = 60 * 60 * 1000;
@@ -120,6 +121,18 @@ describe('GET /sitemap.xml', () => {
     expect(guest.status).toBe(200);
     const draftPage = await request(app).get(`/api/problems/${contestOnly.slug}`);
     expect(draftPage.status).toBe(404);
+  });
+
+  it('is rate-limited like the api (every request runs database queries)', async () => {
+    const limited = createApp({ rateLimits: { api: true }, publicOrigin: ORIGIN });
+    const res = await request(limited).get('/sitemap.xml');
+    expect(res.status).toBe(200);
+    expect(res.headers['ratelimit-policy']).toBe(
+      `${RATE_LIMITS.api.limit};w=${RATE_LIMITS.api.windowMs / 1000}`,
+    );
+    // One bucket per client with /api: a loop on the sitemap gets no allowance on top of it.
+    const api = await request(limited).get('/api/problems');
+    expect(api.headers.ratelimit).toMatch(new RegExp(`remaining=${RATE_LIMITS.api.limit - 2}\\b`));
   });
 
   it('lists no user-specific pages', async () => {
