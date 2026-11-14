@@ -86,6 +86,8 @@ const INVALID = 'Invalid refresh token';
  * How long after a rotation the old token may be presented again when the response carrying its
  * successor was lost (flaky networks): the unused successor is revoked and a fresh one is issued
  * in the same family. Only while the successor has never been used; otherwise it is reuse.
+ * Trade-off: a thief whose replay wins keeps the session until the user's browser next presents
+ * its own (now revoked) successor, which is reuse and revokes the family.
  */
 export const REFRESH_GRACE_MS = 30 * SECOND_MS;
 

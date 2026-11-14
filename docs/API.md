@@ -31,7 +31,10 @@ two documented extras.
   revoked revokes the whole token family (reuse detection) and answers 401. The exception is a lost
   response: a token rotated less than 30 s ago whose successor was never used gets a fresh successor
   in the same session (the unused one is revoked). A thief replaying a stolen old token inside those
-  30 s could race the user; the window is short and opens only while the successor is unused.
+  30 s could race the user; the window is short and opens only while the successor is unused. Only
+  the replay has to fall inside it: a thief who wins keeps the session, rotating as usual, until the
+  user's browser next refreshes (its first request after the 15-minute access token expires, or the
+  next page load). That refresh is reuse, so the family is revoked and both are signed out.
 - `POST /api/auth/logout` revokes the family and clears the cookie.
 - Passwords are hashed with Argon2id (19 MiB memory, 2 iterations). A login for an unknown account
   verifies against a dummy hash of the same cost, so the response time does not reveal whether the

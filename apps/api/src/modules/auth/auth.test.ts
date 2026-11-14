@@ -387,6 +387,30 @@ describe('refresh rotation', () => {
       expect((await refresh(refreshCookie(third)?.value ?? '')).status).toBe(401);
     });
 
+    it('a replay within the window after logout with the successor stays dead', async () => {
+      const { user, token: first } = await login();
+      const second = await refresh(first);
+      const logout = await request(app)
+        .post('/api/auth/logout')
+        .set('Cookie', `arb_rt=${refreshCookie(second)?.value ?? ''}`);
+      expect(logout.status).toBe(204);
+      advanceClock(2 * SECOND_MS);
+      expect((await refresh(first)).status).toBe(401);
+      expect(await liveCount(user.id)).toBe(0);
+    });
+
+    it('a replay within the window after reuse detection revoked the successor stays dead', async () => {
+      const { user, token: first } = await login();
+      const second = await refresh(first);
+      pastGrace(); // the next rotation, and its window, start here
+      const middle = refreshCookie(second)?.value ?? '';
+      expect((await refresh(middle)).status).toBe(200); // successor of `middle` is live, unused
+      expect((await refresh(first)).status).toBe(401); // reuse outside its window: family revoked
+      expect(await liveCount(user.id)).toBe(0);
+      expect((await refresh(middle)).status).toBe(401); // within its window, successor revoked
+      expect(await liveCount(user.id)).toBe(0);
+    });
+
     it('concurrent replays within the window never leave two live tokens', async () => {
       const { user, token: first } = await login();
       await refresh(first);
