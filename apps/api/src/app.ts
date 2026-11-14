@@ -106,7 +106,8 @@ export function createApp(options: CreateAppOptions = {}): Express {
 
   // /healthz, /readyz, /metrics
   app.use(healthRouter);
-  // /robots.txt, /sitemap.xml
+  // /robots.txt, /sitemap.xml. The sitemap queries the database, so it shares the api's limit.
+  app.use('/sitemap.xml', apiRateLimit);
   app.use(seoRouter);
 
   app.use('/api', apiRateLimit);
