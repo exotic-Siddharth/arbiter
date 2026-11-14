@@ -149,8 +149,10 @@ services:
       context: .
       dockerfile: deploy/web.Dockerfile
       args:
-        # Compiled into the bundle: changing it needs a rebuild (`up -d --build`).
+        # Compiled into the bundle: changing them needs a rebuild (`up -d --build`).
         VITE_DEMO_LOGIN: ${VITE_DEMO_LOGIN:-false}
+        # The canonical link and the link-preview tags (og:url, og:image) are absolute URLs.
+        VITE_PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN in .env.production (the https:// address users open)}
     depends_on:
       api: { condition: service_healthy }
     ports:

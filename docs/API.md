@@ -160,15 +160,17 @@ All under `/api/admin`, ADMIN role required.
 | `GET /judge` | queue counts, workers, queue-to-verdict p50/p95, throughput per minute |
 | `GET /users`; `PATCH /users/:id` | search users, change a role (not one's own; never the last admin) |
 
-### Health and metrics
+### Health, metrics and search engines
 
-These live at the root, not under `/api`, and are not in the OpenAPI document.
+These live at the root, not under `/api`.
 
 | Path | Purpose |
 | --- | --- |
 | `GET /healthz` | process is up: `{ ok: true }` |
 | `GET /readyz` | Postgres and Redis reachable (503 otherwise) |
 | `GET /metrics` | Prometheus metrics (nginx answers 404 for it in production) |
+| `GET /robots.txt` | `text/plain`: crawl everything but `/admin`; names the sitemap |
+| `GET /sitemap.xml` | `application/xml`: the pages a signed-out visitor can open, as absolute URLs on `WEB_ORIGIN` |
 
 ## Socket.IO
 

@@ -8,6 +8,8 @@ export interface AppDeps {
   prisma: PrismaClient;
   redis: Redis;
   rateLimits: RateLimitsConfig;
+  /** The address people open (env WEB_ORIGIN, i.e. PUBLIC_ORIGIN in production), no trailing slash. */
+  publicOrigin: string;
 }
 
 /** The dependencies of the app handling `req` (useful when a test injects its own clients). */

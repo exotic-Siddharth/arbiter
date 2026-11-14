@@ -36,7 +36,8 @@
     "infra:down": "docker compose down",
     "wait-for": "tsx scripts/wait-for.ts",
     "loadtest": "tsx scripts/loadtest.ts",
-    "screenshots": "tsx scripts/screenshots.ts"
+    "screenshots": "tsx scripts/screenshots.ts",
+    "og-image": "tsx scripts/og-image.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
