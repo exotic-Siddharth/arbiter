@@ -143,7 +143,9 @@ route(
     path: '/refresh',
     summary: 'Rotate the refresh token and issue a new access token',
     description:
-      'Reads the arb_rt cookie. Presenting a revoked or already-rotated token revokes the whole family.',
+      'Reads the arb_rt cookie. Presenting a revoked or already-rotated token revokes the whole family, ' +
+      'except within 30 s of its rotation while its successor is unused (a lost response): then the ' +
+      'unused successor is revoked and a fresh one is issued in the same session.',
     tags: ['Auth'],
     auth: 'cookie',
     responses: {

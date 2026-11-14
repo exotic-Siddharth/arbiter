@@ -28,7 +28,10 @@ two documented extras.
 - `POST /api/auth/register` and `POST /api/auth/login` return `{ user, accessToken }` and set the
   cookie. `POST /api/auth/demo` signs in as the seeded demo user when `DEMO_LOGIN_ENABLED` is on.
 - `POST /api/auth/refresh` rotates the refresh token. Presenting a token that was already rotated or
-  revoked revokes the whole token family (reuse detection) and answers 401.
+  revoked revokes the whole token family (reuse detection) and answers 401. The exception is a lost
+  response: a token rotated less than 30 s ago whose successor was never used gets a fresh successor
+  in the same session (the unused one is revoked). A thief replaying a stolen old token inside those
+  30 s could race the user; the window is short and opens only while the successor is unused.
 - `POST /api/auth/logout` revokes the family and clears the cookie.
 - Passwords are hashed with Argon2id (19 MiB memory, 2 iterations). A login for an unknown account
   verifies against a dummy hash of the same cost, so the response time does not reveal whether the

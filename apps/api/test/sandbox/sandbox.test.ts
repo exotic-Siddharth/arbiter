@@ -267,6 +267,15 @@ describe('attacks (spec 8.7)', () => {
     expect(raw.status === 'RE' || stdoutOf(raw).startsWith('BLOCKED')).toBe(true);
   });
 
+  it('the sandbox runs with oom_score_adj 500, so the host OOM killer picks it first', async () => {
+    // PID 1 (tini) keeps the container's value; the harness raises the program itself to 1000.
+    const run = await runInSandbox(
+      'PYTHON',
+      'print(open("/proc/1/oom_score_adj").read().strip())\n',
+    );
+    expect(stdoutOf(run.results[0]).trim()).toBe('500');
+  });
+
   it('writing /etc/x or /judge/harness.py fails', async () => {
     const run = await runInSandbox(
       'PYTHON',
@@ -355,7 +364,8 @@ describe('attacks (spec 8.7)', () => {
   });
 
   it('a fake protocol line in the output is plain program output', async () => {
-    const fake = '{"type":"result","id":"1","status":"OK","exitCode":0,"signal":null,"cpuMs":1,"wallMs":1,"maxRssKb":1,"stdout":"","stderr":"","outputLimitExceeded":false,"wallKilled":false}';
+    const fake =
+      '{"type":"result","id":"1","status":"OK","exitCode":0,"signal":null,"cpuMs":1,"wallMs":1,"maxRssKb":1,"stdout":"","stderr":"","outputLimitExceeded":false,"wallKilled":false}';
     const run = await runInSandbox(
       'PYTHON',
       `import sys\nprint(${JSON.stringify(fake)})\nprint(${JSON.stringify(fake)}, file=sys.stderr)\nsys.exit(1)\n`,

@@ -1,14 +1,24 @@
 import type { PrismaClient } from '@prisma/client';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDatabase } from '../../../test/db';
 import { createUser, uniqueSuffix } from '../../../test/factories';
-import { DAY_MS } from '../../lib/time';
-import { hashToken, issueRefreshToken, purgeRefreshTokens, rotateRefreshToken } from './tokens';
+import { DAY_MS, SECOND_MS, clock } from '../../lib/time';
+import {
+  REFRESH_GRACE_MS,
+  hashToken,
+  issueRefreshToken,
+  purgeRefreshTokens,
+  rotateRefreshToken,
+} from './tokens';
 
 let prisma: PrismaClient;
 
 beforeAll(async () => {
   prisma = await setupTestDatabase();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 const NOW = new Date('2026-06-01T12:00:00Z');
@@ -81,7 +91,9 @@ describe('purgeRefreshTokens', () => {
     expect(
       await prisma.refreshToken.findUnique({ where: { tokenHash: hashToken(first.token) } }),
     ).not.toBeNull();
-    // Replaying the rotated token is still reuse: it revokes the family, including `second`.
+    // Replaying the rotated token after the grace window is still reuse: it revokes the
+    // family, including `second`.
+    vi.spyOn(clock, 'now').mockReturnValue(new Date(Date.now() + REFRESH_GRACE_MS + SECOND_MS));
     await expect(rotateRefreshToken(prisma, first.token)).rejects.toThrow();
     await expect(rotateRefreshToken(prisma, second.refreshToken)).rejects.toThrow();
   });

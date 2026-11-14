@@ -45,8 +45,9 @@ the compose project; the worker starts them on the host's Docker daemon with `--
 - Docker Engine 24 or newer with the Compose v2 plugin (`docker compose`).
 - Capacity: the judge starts up to `JUDGE_CONCURRENCY + RUN_CONCURRENCY` sandbox containers at once
   (defaults 2 and 1 per worker), each capped at the problem's memory limit plus runtime overhead
-  (at most 2 GB) and one CPU. Size the VM for that plus Postgres, Redis, the API and nginx. The author has
-  not measured a minimum VM size; start with what your concurrency needs and watch `docker stats`.
+  (at most 2 GB) and one CPU. Size the VM for that plus Postgres, Redis, the API and nginx; start with
+  what your concurrency needs and watch `docker stats`. The live demo runs on a 1 GB VM with one judge
+  slot and swap: see [Operating it on a small VM](#operating-it-on-a-small-vm).
 - Only ports 22 (SSH), 80 and 443 should be reachable from outside. Nothing else is published.
 
 ## Step by step
@@ -211,6 +212,63 @@ Compose recreates only the services whose image changed. The new `api` applies p
 it serves traffic. Migrations are forward-only: take a `pg_dump` before upgrading, because rolling back means
 restoring it. The worker stops gracefully (it lets running jobs finish, 30 s cap), and the API drains on
 SIGTERM. `docker compose ... down` keeps the volumes; add `-v` only when you mean to delete the data.
+
+## Operating it on a small VM
+
+The live demo (<https://20-205-104-24.sslip.io>) runs this stack on a 1 GB Azure VM (887 MiB of RAM
+visible to Linux) with `docker-compose.prod.yml` and `--profile tls`. A submission's sandbox may use up to
+about 528 MiB, so memory is the constraint. What that deployment does on top of the steps above:
+
+- **4 GB of swap and one judge slot.** `JUDGE_CONCURRENCY=1` in `.env.production`, so only one
+  submission sandbox (plus one custom-input run) exists at a time, and a swap file absorbs the API, worker
+  and image builds:
+
+  ```sh
+  sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
+  sudo mkswap /swapfile && sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  ```
+
+  The sandbox itself never swaps (`--memory-swap` equals `--memory`). When the VM runs out of memory the
+  kernel kills a runaway sandbox first: sandboxes start with `--oom-score-adj 500` (and the harness raises
+  the program to 1000), while `postgres` and `redis` run with `oom_score_adj: -500` in the compose file.
+- **No cloud metadata from containers.** A systemd unit drops container traffic to the metadata
+  service (169.254.169.254, which hands out the VM's identity) in Docker's `DOCKER-USER` chain, after
+  Docker has created that chain at boot. Sandboxes have no network at all; this covers the other
+  containers:
+
+  ```ini
+  # /etc/systemd/system/block-metadata.service
+  [Unit]
+  Description=Block containers from the cloud metadata service
+  After=docker.service
+  Requires=docker.service
+
+  [Service]
+  Type=oneshot
+  RemainAfterExit=yes
+  ExecStart=/bin/sh -c 'iptables -C DOCKER-USER -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I DOCKER-USER -d 169.254.169.254 -j DROP'
+  ExecStop=/sbin/iptables -D DOCKER-USER -d 169.254.169.254 -j DROP
+
+  [Install]
+  WantedBy=multi-user.target
+  ```
+
+  `sudo systemctl enable --now block-metadata`. The host itself can still reach the metadata service.
+- **Security updates with a night-time reboot.** `unattended-upgrades` installs security updates daily
+  and reboots at night when one needs it (in `/etc/apt/apt.conf.d/50unattended-upgrades`:
+  `Unattended-Upgrade::Automatic-Reboot "true";` and `Unattended-Upgrade::Automatic-Reboot-Time "04:00";`).
+  Every service has `restart: unless-stopped`, so the stack comes back on its own after the reboot.
+- **A nightly `pg_dump`, seven days kept.** A root cron entry runs the backup command from
+  [Operating it](#operating-it) into `/var/backups/arbiter/arbiter-$(date +%F).dump` every night and then
+  deletes dumps older than seven days (`find /var/backups/arbiter -name 'arbiter-*.dump' -mtime +6 -delete`).
+  Copy them off the VM as well: a dump on the same disk does not survive losing the VM.
+- **The demo data.** Unlike a real deployment ([step 6](#6-create-the-first-admin-and-add-problems)),
+  the live demo was seeded once with the demo data, with `DEMO_LOGIN_ENABLED=true` so the "Try the demo"
+  button works. With `NODE_ENV=production` the seed requires `SEED_ADMIN_PASSWORD` for `admin`, and gives
+  the `demo` account and the 30 synthetic users random passwords that are never printed, so nobody can
+  sign in as a synthetic user; `demo` is reached only through the button. Development seeds keep
+  `demo12345` for both.
 
 ## Why serverless hosts cannot run the worker
 

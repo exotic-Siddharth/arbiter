@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { env } from '../config/env';
 import { prisma } from '../db/prisma';
@@ -44,6 +45,42 @@ const MINUTE = 60_000;
 /** The demo accounts the seed creates (usernames; the passwords come from the environment). */
 export const SEED_ADMIN = { username: 'admin', email: 'admin@arbiter.dev' } as const;
 export const SEED_DEMO = { username: 'demo', email: 'demo@arbiter.dev' } as const;
+
+/** 192 random bits: hashed for the account and then discarded, so nobody knows it. */
+const randomPassword = (): string => randomBytes(24).toString('base64url');
+
+/**
+ * The passwords of the demo account and of the synthetic users. Development keeps
+ * SEED_DEMO_PASSWORD (the published demo12345) for both. In production each gets a random
+ * password that is never printed: the demo account is reached through the "Try the demo" button
+ * (POST /api/auth/demo), and nobody should sign in as a synthetic user. Admin always uses
+ * SEED_ADMIN_PASSWORD.
+ */
+export function seedPasswords(production: boolean = env.isProduction): {
+  demo: string;
+  synthetic: string;
+} {
+  if (!production) return { demo: env.SEED_DEMO_PASSWORD, synthetic: env.SEED_DEMO_PASSWORD };
+  return { demo: randomPassword(), synthetic: randomPassword() };
+}
+
+/** What `npm run db:seed` prints about the accounts; no password at all in production. */
+export function credentialLines(production: boolean = env.isProduction): string[] {
+  if (production) {
+    return [
+      'Accounts (production):',
+      `  admin  username: ${SEED_ADMIN.username}  password: the SEED_ADMIN_PASSWORD you set`,
+      `  demo   username: ${SEED_DEMO.username}   random password (not printed); reach it with the "Try the demo" button`,
+      '  every synthetic user has a random password (not printed): nobody can sign in as them',
+    ];
+  }
+  return [
+    'Demo credentials (local development values):',
+    `  demo   username: ${SEED_DEMO.username}   password: ${env.SEED_DEMO_PASSWORD}   (also the "Try the demo" button)`,
+    `  admin  username: ${SEED_ADMIN.username}  password: ${env.SEED_ADMIN_PASSWORD}`,
+    '  every synthetic user (for example byte_baker) uses the demo password',
+  ];
+}
 
 const SYNTHETIC_NAMES = [
   'byte_baker',
@@ -298,7 +335,10 @@ export interface SeedSummary {
   plagiarismPairs: number;
 }
 
-export async function runSeed(log: (line: string) => void = console.log): Promise<SeedSummary> {
+export async function runSeed(
+  log: (line: string) => void = console.log,
+  options: { production?: boolean } = {},
+): Promise<SeedSummary> {
   const adminPassword = env.SEED_ADMIN_PASSWORD;
   if (!adminPassword) {
     throw new Error(
@@ -322,10 +362,11 @@ export async function runSeed(log: (line: string) => void = console.log): Promis
   await wipe();
 
   // --- users -----------------------------------------------------------------------------
+  const passwords = seedPasswords(options.production ?? env.isProduction);
   const [adminHash, demoHash, syntheticHash] = await Promise.all([
     hashPassword(adminPassword),
-    hashPassword(env.SEED_DEMO_PASSWORD),
-    hashPassword(env.SEED_DEMO_PASSWORD),
+    hashPassword(passwords.demo),
+    hashPassword(passwords.synthetic),
   ]);
   const ranked = shuffled(rng, SYNTHETIC_NAMES);
   const synthetic: UserRow[] = ranked.map((username, i) => {

@@ -5,10 +5,9 @@
  * Stops with a clear message, before the database is touched, when the hidden tests are missing:
  * run `npm run problems:gen` first (they are not committed).
  */
-import { env } from '../src/config/env';
 import { closeAll } from '../src/lib/lifecycle';
 import { SeedDataError } from '../src/seed/problems';
-import { SEED_ADMIN, SEED_DEMO, runSeed } from '../src/seed/run';
+import { credentialLines, runSeed } from '../src/seed/run';
 
 async function main(): Promise<void> {
   const started = Date.now();
@@ -20,12 +19,7 @@ async function main(): Promise<void> {
       `${summary.ratingChanges} rating changes, ${summary.plagiarismPairs} plagiarism pairs.`,
   );
   console.log('');
-  console.log('Demo credentials (local development values):');
-  console.log(
-    `  demo   username: ${SEED_DEMO.username}   password: ${env.SEED_DEMO_PASSWORD}   (also the "Try the demo" button)`,
-  );
-  console.log(`  admin  username: ${SEED_ADMIN.username}  password: ${env.SEED_ADMIN_PASSWORD}`);
-  console.log('  every synthetic user (for example byte_baker) uses the demo password');
+  for (const line of credentialLines()) console.log(line);
 }
 
 try {

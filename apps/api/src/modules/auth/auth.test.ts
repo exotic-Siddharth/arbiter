@@ -1,14 +1,15 @@
 import { AuthResponseSchema, ErrorBodySchema, MeResponseSchema } from '@arbiter/shared';
 import type { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../app';
 import { env } from '../../config/env';
 import { verifyAccessToken } from '../../lib/jwt';
 import * as password from '../../lib/password';
+import { SECOND_MS, clock } from '../../lib/time';
 import { TEST_PASSWORD, authHeader, createUser, uniqueSuffix } from '../../../test/factories';
 import { setupTestDatabase } from '../../../test/db';
-import { hashToken, rotateRefreshToken } from './tokens';
+import { REFRESH_GRACE_MS, hashToken, rotateRefreshToken } from './tokens';
 
 let prisma: PrismaClient;
 // Rate limits off here; the limiter tests build their own app below.
@@ -198,6 +199,19 @@ describe('refresh rotation', () => {
     return { user, token: refreshCookie(res)?.value ?? '' };
   }
 
+  /** Moves the app clock `ms` ahead of real time (rotation and the grace check read it). */
+  const advanceClock = (ms: number) =>
+    vi.spyOn(clock, 'now').mockImplementation(() => new Date(Date.now() + ms));
+  const pastGrace = () => advanceClock(REFRESH_GRACE_MS + SECOND_MS);
+  const refresh = (token: string) =>
+    request(app).post('/api/auth/refresh').set('Cookie', `arb_rt=${token}`);
+  const liveCount = (userId: string) =>
+    prisma.refreshToken.count({ where: { userId, revokedAt: null } });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('POST /refresh rotates the cookie and returns a fresh access token', async () => {
     const { user, token } = await login();
     const res = await request(app).post('/api/auth/refresh').set('Cookie', `arb_rt=${token}`);
@@ -218,12 +232,13 @@ describe('refresh rotation', () => {
     expect(old?.replacedById).toBe(records.find((r) => r.id !== old?.id)?.id);
   });
 
-  it('reusing an old refresh token → 401 and the whole family is revoked', async () => {
+  it('reusing an old refresh token after the grace window → 401 and the whole family is revoked', async () => {
     const { user, token: first } = await login();
     const second = await request(app).post('/api/auth/refresh').set('Cookie', `arb_rt=${first}`);
     const newest = refreshCookie(second)?.value ?? '';
     expect(second.status).toBe(200);
 
+    pastGrace();
     const replay = await request(app).post('/api/auth/refresh').set('Cookie', `arb_rt=${first}`);
     expect(replay.status).toBe(401);
     expect(ErrorBodySchema.parse(replay.body).error.code).toBe('UNAUTHORIZED');
@@ -242,6 +257,7 @@ describe('refresh rotation', () => {
       .send({ identifier: user.username, password: TEST_PASSWORD });
     const otherToken = refreshCookie(other)?.value ?? '';
     await request(app).post('/api/auth/refresh').set('Cookie', `arb_rt=${first}`);
+    pastGrace();
     await request(app).post('/api/auth/refresh').set('Cookie', `arb_rt=${first}`); // replay
     const ok = await request(app).post('/api/auth/refresh').set('Cookie', `arb_rt=${otherToken}`);
     expect(ok.status).toBe(200);
@@ -294,6 +310,99 @@ describe('refresh rotation', () => {
     // The loser is treated as reuse: the family is revoked.
     const live = await prisma.refreshToken.count({ where: { userId: user.id, revokedAt: null } });
     expect(live).toBe(0);
+  });
+
+  describe('grace window for a lost refresh response', () => {
+    it('a replay within the window keeps the session: a fresh successor, the unused one is dead', async () => {
+      const { user, token: first } = await login();
+      const lost = await refresh(first); // rotated, but the response never reached the browser
+      expect(lost.status).toBe(200);
+      const unused = refreshCookie(lost)?.value ?? '';
+
+      advanceClock(5 * SECOND_MS);
+      const replay = await refresh(first);
+      expect(replay.status).toBe(200);
+      expect(AuthResponseSchema.parse(replay.body).user.id).toBe(user.id);
+      const fresh = refreshCookie(replay)?.value ?? '';
+      expect(fresh).toBeTruthy();
+      expect(fresh).not.toBe(unused);
+
+      // Same session (family); the unused successor is revoked; only the fresh token is live.
+      const records = await prisma.refreshToken.findMany({ where: { userId: user.id } });
+      expect(new Set(records.map((r) => r.familyId)).size).toBe(1);
+      const byToken = (t: string) => records.find((r) => r.tokenHash === hashToken(t));
+      expect(byToken(unused)?.revokedAt).not.toBeNull();
+      expect(byToken(fresh)?.revokedAt).toBeNull();
+      expect(byToken(first)?.replacedById).toBe(byToken(fresh)?.id);
+      expect(await liveCount(user.id)).toBe(1);
+
+      const next = await refresh(fresh);
+      expect(next.status).toBe(200);
+      expect(await liveCount(user.id)).toBe(1);
+      // The revoked successor is dead (presenting it now is reuse).
+      expect((await refresh(unused)).status).toBe(401);
+    });
+
+    it('repeated replays within the window keep at most one live successor', async () => {
+      const { user, token: first } = await login();
+      await refresh(first);
+      advanceClock(2 * SECOND_MS);
+      const a = await refresh(first);
+      const b = await refresh(first);
+      expect(a.status).toBe(200);
+      expect(b.status).toBe(200);
+      expect(await liveCount(user.id)).toBe(1);
+      const live = await prisma.refreshToken.findFirst({
+        where: { userId: user.id, revokedAt: null },
+      });
+      expect(live?.tokenHash).toBe(hashToken(refreshCookie(b)?.value ?? ''));
+    });
+
+    it('the window counts from the original rotation: re-issues do not extend it', async () => {
+      const { user, token: first } = await login();
+      await refresh(first);
+      advanceClock(REFRESH_GRACE_MS - 5 * SECOND_MS);
+      expect((await refresh(first)).status).toBe(200);
+      advanceClock(REFRESH_GRACE_MS + 5 * SECOND_MS);
+      expect((await refresh(first)).status).toBe(401);
+      expect(await liveCount(user.id)).toBe(0);
+    });
+
+    it('a replay after the window revokes the family', async () => {
+      const { user, token: first } = await login();
+      const second = await refresh(first);
+      pastGrace();
+      expect((await refresh(first)).status).toBe(401);
+      expect(await liveCount(user.id)).toBe(0);
+      expect((await refresh(refreshCookie(second)?.value ?? '')).status).toBe(401);
+    });
+
+    it('a replay after the successor was used revokes the family, even within the window', async () => {
+      const { user, token: first } = await login();
+      const second = await refresh(first);
+      const third = await refresh(refreshCookie(second)?.value ?? '');
+      expect(third.status).toBe(200);
+      expect((await refresh(first)).status).toBe(401);
+      expect(await liveCount(user.id)).toBe(0);
+      expect((await refresh(refreshCookie(third)?.value ?? '')).status).toBe(401);
+    });
+
+    it('concurrent replays within the window never leave two live tokens', async () => {
+      const { user, token: first } = await login();
+      await refresh(first);
+      const results = await Promise.allSettled(
+        Array.from({ length: 4 }, () => rotateRefreshToken(prisma, first, {})),
+      );
+      const won = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value.refreshToken] : []));
+      expect(won.length).toBeLessThanOrEqual(1);
+      const live = await prisma.refreshToken.findMany({
+        where: { userId: user.id, revokedAt: null },
+      });
+      expect(live.length).toBeLessThanOrEqual(1);
+      if (won.length === 1 && live.length === 1) {
+        expect(live[0].tokenHash).toBe(hashToken(won[0]));
+      }
+    });
   });
 });
 
