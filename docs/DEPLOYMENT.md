@@ -265,10 +265,14 @@ about 528 MiB, so memory is the constraint. What that deployment does on top of 
   Copy them off the VM as well: a dump on the same disk does not survive losing the VM.
 - **The demo data.** Unlike a real deployment ([step 6](#6-create-the-first-admin-and-add-problems)),
   the live demo was seeded once with the demo data, with `DEMO_LOGIN_ENABLED=true` so the "Try the demo"
-  button works. With `NODE_ENV=production` the seed requires `SEED_ADMIN_PASSWORD` for `admin`, and gives
-  the `demo` account and the 30 synthetic users random passwords that are never printed, so nobody can
-  sign in as a synthetic user; `demo` is reached only through the button. Development seeds keep
-  `demo12345` for both.
+  button works. A production seed run today (`NODE_ENV=production`) requires `SEED_ADMIN_PASSWORD` for
+  `admin`, and gives the `demo` account and the 30 synthetic users random passwords that are never
+  printed, so nobody can sign in as a synthetic user; `demo` is reached only through the button.
+  Development seeds keep `demo12345` for both. The live demo was seeded before that change (DESIGN.md,
+  Decisions log, 2026-11-14), so its database still stores `demo12345` hashes for `demo` and the
+  synthetic users: anyone can sign in as one of them and edit its bio (only `demo` is protected) until
+  the live database is reseeded with `NODE_ENV=production` (which replaces all its data) or those
+  accounts' password hashes are reset.
 
 ## Why serverless hosts cannot run the worker
 
